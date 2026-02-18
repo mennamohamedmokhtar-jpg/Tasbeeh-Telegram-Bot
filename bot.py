@@ -19,7 +19,7 @@ DEFAULT_DATA = {
     "users": {}
 }
 
-# أذكار تصاعدية (زي الكود الأصلي)
+# أذكار تصاعدية (تسبيح)
 AZKAR_INC = {
     "tasbeeh": {"name": "سبحان الله", "emoji": "🟢"},
     "tahmeed": {"name": "الحمد لله", "emoji": "🔵"},
@@ -29,7 +29,7 @@ AZKAR_INC = {
     "salat": {"name": "اللهم صلِّ على محمد ﷺ", "emoji": "🤍"}
 }
 
-# أذكار تنازلية (بعدد ثابت)
+# أذكار تنازلية (ثابتة بعدد)
 AZKAR_DEC = {
     "morning": {"name": "أذكار الصباح", "emoji": "🌅", "max": 33},
     "evening": {"name": "أذكار المساء", "emoji": "🌇", "max": 33},
@@ -65,36 +65,56 @@ def get_user(uid):
         save_data(DATA)
     return DATA["users"][uid]
 
+# ===================== DIGITAL COUNTER =====================
+DIGITS = {
+    "0": "𝟎", "1": "𝟏", "2": "𝟐", "3": "𝟑", "4": "𝟒",
+    "5": "𝟓", "6": "𝟔", "7": "𝟕", "8": "𝟖", "9": "𝟗"
+}
+
+def digital(n):
+    return "".join(DIGITS.get(d, d) for d in str(n))
+
 # ===================== UI =====================
 def main_menu():
-    kb = InlineKeyboardMarkup(row_width=2)
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton("📿 تسبيح", callback_data="menu_inc"),
+        InlineKeyboardButton("📖 أذكار ثابتة", callback_data="menu_dec"),
+        InlineKeyboardButton("📊 الإحصائيات", callback_data="menu_stats")
+    )
+    return kb
 
+def inc_list_menu():
+    kb = InlineKeyboardMarkup(row_width=2)
     for k, v in AZKAR_INC.items():
         kb.add(InlineKeyboardButton(f"{v['emoji']} {v['name']}", callback_data=f"inc|{k}"))
+    kb.add(InlineKeyboardButton("🏠 الرئيسية", callback_data="back_main"))
+    return kb
 
+def dec_list_menu():
+    kb = InlineKeyboardMarkup(row_width=2)
     for k, v in AZKAR_DEC.items():
         kb.add(InlineKeyboardButton(f"{v['emoji']} {v['name']}", callback_data=f"dec|{k}"))
-
-    kb.add(InlineKeyboardButton("📊 الإحصائيات", callback_data="menu_stats"))
+    kb.add(InlineKeyboardButton("🏠 الرئيسية", callback_data="back_main"))
     return kb
 
 def inc_menu(key):
     kb = InlineKeyboardMarkup(row_width=3)
     kb.add(
-        InlineKeyboardButton("➕ تسبيحة", callback_data=f"inc_add|{key}"),
-        InlineKeyboardButton("➖ إنقاص", callback_data=f"inc_sub|{key}"),
-        InlineKeyboardButton("🔄 تصفير", callback_data=f"inc_reset|{key}")
+        InlineKeyboardButton("➕", callback_data=f"inc_add|{key}"),
+        InlineKeyboardButton("➖", callback_data=f"inc_sub|{key}"),
+        InlineKeyboardButton("🔄", callback_data=f"inc_reset|{key}")
     )
-    kb.add(InlineKeyboardButton("🏠 القائمة الرئيسية", callback_data="back_main"))
+    kb.add(InlineKeyboardButton("📿 رجوع لتسبيح", callback_data="menu_inc"))
     return kb
 
 def dec_menu(key):
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton("➖ إنقاص", callback_data=f"dec_sub|{key}"),
-        InlineKeyboardButton("🔄 إعادة", callback_data=f"dec_reset|{key}")
+        InlineKeyboardButton("➖", callback_data=f"dec_sub|{key}"),
+        InlineKeyboardButton("🔄", callback_data=f"dec_reset|{key}")
     )
-    kb.add(InlineKeyboardButton("🏠 القائمة الرئيسية", callback_data="back_main"))
+    kb.add(InlineKeyboardButton("📖 رجوع للأذكار", callback_data="menu_dec"))
     return kb
 
 # ===================== HELPERS =====================
@@ -104,8 +124,10 @@ def format_inc_text(key, user):
     total = user["total_inc"]
     return (
         f"{z['emoji']} <b>{z['name']}</b>\n\n"
-        f"🔢 عدد هذا الذكر: <b>{count:,}</b>\n"
-        f"✨ إجمالي أذكارك: <b>{total:,}</b>"
+        f"╔══════════════╗\n"
+        f"     {digital(count)}\n"
+        f"╚══════════════╝\n\n"
+        f"✨ إجمالي: <b>{digital(total)}</b>"
     )
 
 def format_dec_text(key, user):
@@ -115,23 +137,21 @@ def format_dec_text(key, user):
     done = max_count - remaining
     return (
         f"{z['emoji']} <b>{z['name']}</b>\n\n"
-        f"📿 المتبقي: <b>{remaining}</b>\n"
-        f"✅ المنجز: <b>{done}</b> من <b>{max_count}</b>"
+        f"╔══════════════╗\n"
+        f"     {digital(remaining)}\n"
+        f"╚══════════════╝\n\n"
+        f"✅ المنجز: <b>{digital(done)}</b> / {digital(max_count)}"
     )
 
 def format_stats(user):
     lines = ["<b>📊 إحصائياتك:</b>\n"]
-
-    lines.append("<b>🔹 الأذكار التصاعدية:</b>")
+    lines.append("<b>📿 تسبيح:</b>")
     for k, v in AZKAR_INC.items():
-        lines.append(f"{v['emoji']} {v['name']} : <b>{user['counts_inc'][k]:,}</b>")
-
-    lines.append(f"\n✨ المجموع الكلي التصاعدي: <b>{user['total_inc']:,}</b>\n")
-
-    lines.append("<b>🔹 الأذكار التنازلية:</b>")
+        lines.append(f"{v['emoji']} {v['name']} : <b>{digital(user['counts_inc'][k])}</b>")
+    lines.append(f"\n✨ الإجمالي: <b>{digital(user['total_inc'])}</b>\n")
+    lines.append("<b>📖 الأذكار الثابتة:</b>")
     for k, v in AZKAR_DEC.items():
-        lines.append(f"{v['emoji']} {v['name']} : المتبقي <b>{user['counts_dec'][k]}</b>")
-
+        lines.append(f"{v['emoji']} {v['name']} : المتبقي <b>{digital(user['counts_dec'][k])}</b>")
     return "\n".join(lines)
 
 # ===================== HANDLERS =====================
@@ -140,7 +160,7 @@ def start(m):
     get_user(m.from_user.id)
     bot.send_message(
         m.chat.id,
-        "📿 مرحباً بك في بوت الأذكار\nاختر من القائمة أدناه:",
+        "📿 <b>القائمة الرئيسية</b>",
         reply_markup=main_menu()
     )
 
@@ -150,14 +170,26 @@ def callbacks(c):
     user = get_user(uid)
     data = c.data
 
-    # ===== تصاعدي =====
-    if data.startswith("inc|"):
+    if data == "menu_inc":
+        bot.send_message(c.message.chat.id, "📿 <b>قائمة التسبيح</b>", reply_markup=inc_list_menu())
+
+    elif data == "menu_dec":
+        bot.send_message(c.message.chat.id, "📖 <b>قائمة الأذكار الثابتة</b>", reply_markup=dec_list_menu())
+
+    elif data.startswith("inc|"):
         key = data.split("|")[1]
-        bot.edit_message_text(
-            format_inc_text(key, user),
+        bot.send_message(
             c.message.chat.id,
-            c.message.message_id,
+            format_inc_text(key, user),
             reply_markup=inc_menu(key)
+        )
+
+    elif data.startswith("dec|"):
+        key = data.split("|")[1]
+        bot.send_message(
+            c.message.chat.id,
+            format_dec_text(key, user),
+            reply_markup=dec_menu(key)
         )
 
     elif data.startswith("inc_add|"):
@@ -197,16 +229,6 @@ def callbacks(c):
             reply_markup=inc_menu(key)
         )
 
-    # ===== تنازلي =====
-    elif data.startswith("dec|"):
-        key = data.split("|")[1]
-        bot.edit_message_text(
-            format_dec_text(key, user),
-            c.message.chat.id,
-            c.message.message_id,
-            reply_markup=dec_menu(key)
-        )
-
     elif data.startswith("dec_sub|"):
         key = data.split("|")[1]
         if user["counts_dec"][key] > 0:
@@ -231,20 +253,16 @@ def callbacks(c):
         )
 
     elif data == "menu_stats":
-        kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton("🏠 القائمة الرئيسية", callback_data="back_main"))
-        bot.edit_message_text(
-            format_stats(user),
+        bot.send_message(
             c.message.chat.id,
-            c.message.message_id,
-            reply_markup=kb
+            format_stats(user),
+            reply_markup=main_menu()
         )
 
     elif data == "back_main":
-        bot.edit_message_text(
-            "📿 القائمة الرئيسية:",
+        bot.send_message(
             c.message.chat.id,
-            c.message.message_id,
+            "📿 <b>القائمة الرئيسية</b>",
             reply_markup=main_menu()
         )
 
