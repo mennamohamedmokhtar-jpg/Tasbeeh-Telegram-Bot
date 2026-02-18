@@ -1,35 +1,52 @@
-import json
+# -*- coding: utf-8 -*-
+# ===================== IMPORTS =====================
+import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import os
-from datetime import datetime, date
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup
-)
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    CallbackQueryHandler,
-    ContextTypes
-)
+import time
+import json
 
-BOT_TOKEN = "PUT_YOUR_TOKEN_HERE"
+# ===================== CONFIG =====================
+TOKEN = os.getenv("BOT_TOKEN")
+if not TOKEN:
+    raise RuntimeError("BOT_TOKEN is missing")
+
+bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
+
 DATA_FILE = "data.json"
 
-ADHKAR = {
-    "tasbeeh": "سبحان الله",
-    "tahmeed": "الحمد لله",
-    "takbeer": "الله أكبر",
-    "istighfar": "أستغفر الله",
-    "salat": "اللهم صلِّ على محمد",
-    "hawqala": "لا حول ولا قوة إلا بالله"
+# ===================== DATA =====================
+DEFAULT_DATA = {
+    "users": {}
 }
 
-# ----------------- DATA -----------------
+AZKAR = {
+    "tasbeeh": {
+        "name": "سبحان الله",
+        "emoji": "🟢"
+    },
+    "tahmeed": {
+        "name": "الحمد لله",
+        "emoji": "🔵"
+    },
+    "takbeer": {
+        "name": "الله أكبر",
+        "emoji": "🟣"
+    },
+    "tahleel": {
+        "name": "لا إله إلا الله",
+        "emoji": "🟠"
+    },
+    "istighfar": {
+        "name": "أستغفر الله",
+        "emoji": "🟡"
+    }
+}
 
+# ===================== STORAGE =====================
 def load_data():
     if not os.path.exists(DATA_FILE):
-        return {}
+        save_data(DEFAULT_DATA)
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -37,140 +54,169 @@ def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def get_user(data, user_id):
-    today = str(date.today())
-    if str(user_id) not in data:
-        data[str(user_id)] = {
-            "counts": {k: 0 for k in ADHKAR},
-            "daily": {today: {k: 0 for k in ADHKAR}},
-            "session": {k: 0 for k in ADHKAR},
-            "achievements": [],
-            "custom": {},
-            "silent": False,
-            "night": False
+DATA = load_data()
+
+def get_user(uid):
+    uid = str(uid)
+    if uid not in DATA["users"]:
+        DATA["users"][uid] = {
+            "counts": {k: 0 for k in AZKAR.keys()},
+            "total": 0,
+            "created": int(time.time())
         }
-    return data[str(user_id)]
+        save_data(DATA)
+    return DATA["users"][uid]
 
-# ----------------- UI -----------------
+# ===================== UI =====================
+def main_menu():
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton("📿 الأذكار", callback_data="menu_azkar"),
+        InlineKeyboardButton("📊 الإحصائيات", callback_data="menu_stats")
+    )
+    return kb
 
-def adhkar_menu():
-    buttons = [
-        [InlineKeyboardButton(ADHKAR[k], callback_data=f"zikr_{k}")]
-        for k in ADHKAR
-    ]
-    buttons.append([
-        InlineKeyboardButton("📊 الإحصائيات", callback_data="stats"),
-        InlineKeyboardButton("🕊 وضع الخشوع", callback_data="khushoo")
-    ])
-    buttons.append([
-        InlineKeyboardButton("➕ ذكر مخصص", callback_data="custom"),
-        InlineKeyboardButton("⚙️ الإعدادات", callback_data="settings")
-    ])
-    return InlineKeyboardMarkup(buttons)
+def azkar_menu():
+    kb = InlineKeyboardMarkup(row_width=2)
+    for k, v in AZKAR.items():
+        kb.add(
+            InlineKeyboardButton(
+                f"{v['emoji']} {v['name']}",
+                callback_data=f"zikr|{k}"
+            )
+        )
+    kb.add(
+        InlineKeyboardButton("⬅️ رجوع", callback_data="back_main")
+    )
+    return kb
 
-def zikr_keyboard(key):
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("➕ سبح", callback_data=f"count_{key}"),
-            InlineKeyboardButton("🔙 رجوع", callback_data="back")
-        ]
-    ])
+def zikr_counter_menu(zikr_key, user):
+    kb = InlineKeyboardMarkup(row_width=3)
+    kb.add(
+        InlineKeyboardButton("➕ تسبيحة", callback_data=f"add|{zikr_key}"),
+        InlineKeyboardButton("➖ إنقاص", callback_data=f"sub|{zikr_key}"),
+        InlineKeyboardButton("🔄 تصفير", callback_data=f"reset|{zikr_key}")
+    )
+    kb.add(
+        InlineKeyboardButton("⬅️ رجوع للأذكار", callback_data="menu_azkar"),
+        InlineKeyboardButton("🏠 الرئيسية", callback_data="back_main")
+    )
+    return kb
 
-# ----------------- HANDLERS -----------------
+def stats_menu(user):
+    lines = ["<b>📊 إحصائياتك:</b>\n"]
+    for k, v in AZKAR.items():
+        count = user["counts"][k]
+        lines.append(f"{v['emoji']} {v['name']} : <b>{count:,}</b>")
+    lines.append(f"\n✨ المجموع الكلي: <b>{user['total']:,}</b>")
+    text = "\n".join(lines)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🤍 مرحبًا بك في سبحتك الرقمية\nاختر الذكر وابدأ الطمأنينة",
-        reply_markup=adhkar_menu()
+    kb = InlineKeyboardMarkup()
+    kb.add(
+        InlineKeyboardButton("⬅️ رجوع", callback_data="back_main")
+    )
+    return text, kb
+
+# ===================== HELPERS =====================
+def format_zikr_text(zikr_key, user):
+    z = AZKAR[zikr_key]
+    count = user["counts"][zikr_key]
+    total = user["total"]
+    return (
+        f"{z['emoji']} <b>{z['name']}</b>\n\n"
+        f"🔢 عدد هذا الذكر: <b>{count:,}</b>\n"
+        f"✨ إجمالي أذكارك: <b>{total:,}</b>"
     )
 
-async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+# ===================== HANDLERS =====================
+@bot.message_handler(commands=["start"])
+def start(m):
+    get_user(m.from_user.id)
+    bot.send_message(
+        m.chat.id,
+        "📿 مرحباً بك في بوت الأذكار\n\nاختر من القائمة:",
+        reply_markup=main_menu()
+    )
 
-    data = load_data()
-    user = get_user(data, query.from_user.id)
+@bot.callback_query_handler(func=lambda c: True)
+def callbacks(c):
+    uid = c.from_user.id
+    user = get_user(uid)
+    data = c.data
 
-    if query.data.startswith("zikr_"):
-        key = query.data.split("_")[1]
-        await query.edit_message_text(
-            f"📿 {ADHKAR[key]}\n\n"
-            f"🔢 الجلسة: {user['session'][key]}\n"
-            f"📊 الإجمالي: {user['counts'][key]}",
-            reply_markup=zikr_keyboard(key)
-        )
-
-    elif query.data.startswith("count_"):
-        key = query.data.split("_")[1]
-        today = str(date.today())
-
-        user["counts"][key] += 1
-        user["session"][key] += 1
-        user["daily"].setdefault(today, {k: 0 for k in ADHKAR})
-        user["daily"][today][key] += 1
-
-        # Achievement
-        if user["counts"][key] in [1000, 10000, 100000]:
-            user["achievements"].append(f"{ADHKAR[key]} x {user['counts'][key]}")
-
-        save_data(data)
-
-        await query.edit_message_text(
-            f"📿 {ADHKAR[key]}\n\n"
-            f"✨ الجلسة: {user['session'][key]}\n"
-            f"📊 الإجمالي: {user['counts'][key]}",
-            reply_markup=zikr_keyboard(key)
-        )
-
-    elif query.data == "stats":
-        text = "📊 إحصائياتك:\n\n"
-        for k, v in user["counts"].items():
-            text += f"{ADHKAR[k]}: {v}\n"
-
-        if user["achievements"]:
-            text += "\n🏆 إنجازات:\n"
-            for a in user["achievements"]:
-                text += f"• {a}\n"
-
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 رجوع", callback_data="back")]
-        ]))
-
-    elif query.data == "khushoo":
-        await query.edit_message_text(
-            "🕊 وضع الخشوع\nاضغط فقط واذكر الله",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("➕ ذكر", callback_data="count_tasbeeh")],
-                [InlineKeyboardButton("🔙 خروج", callback_data="back")]
-            ])
-        )
-
-    elif query.data == "settings":
-        await query.edit_message_text(
-            "⚙️ الإعدادات",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔒 وضع السرية", callback_data="silent")],
-                [InlineKeyboardButton("🌙 الوضع الليلي", callback_data="night")],
-                [InlineKeyboardButton("🔙 رجوع", callback_data="back")]
-            ])
-        )
-
-    elif query.data == "back":
-        await query.edit_message_text(
+    if data == "menu_azkar":
+        bot.edit_message_text(
             "📿 اختر الذكر:",
-            reply_markup=adhkar_menu()
+            c.message.chat.id,
+            c.message.message_id,
+            reply_markup=azkar_menu()
         )
 
-    save_data(data)
+    elif data == "menu_stats":
+        text, kb = stats_menu(user)
+        bot.edit_message_text(
+            text,
+            c.message.chat.id,
+            c.message.message_id,
+            reply_markup=kb
+        )
 
-# ----------------- MAIN -----------------
+    elif data == "back_main":
+        bot.edit_message_text(
+            "🏠 القائمة الرئيسية:",
+            c.message.chat.id,
+            c.message.message_id,
+            reply_markup=main_menu()
+        )
 
-def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(menu_handler))
-    print("Bot is running...")
-    app.run_polling()
+    elif data.startswith("zikr|"):
+        zikr_key = data.split("|")[1]
+        bot.edit_message_text(
+            format_zikr_text(zikr_key, user),
+            c.message.chat.id,
+            c.message.message_id,
+            reply_markup=zikr_counter_menu(zikr_key, user)
+        )
 
-if __name__ == "__main__":
-    main()
+    elif data.startswith("add|"):
+        zikr_key = data.split("|")[1]
+        user["counts"][zikr_key] += 1
+        user["total"] += 1
+        save_data(DATA)
+        bot.edit_message_text(
+            format_zikr_text(zikr_key, user),
+            c.message.chat.id,
+            c.message.message_id,
+            reply_markup=zikr_counter_menu(zikr_key, user)
+        )
+
+    elif data.startswith("sub|"):
+        zikr_key = data.split("|")[1]
+        if user["counts"][zikr_key] > 0:
+            user["counts"][zikr_key] -= 1
+            user["total"] -= 1
+        save_data(DATA)
+        bot.edit_message_text(
+            format_zikr_text(zikr_key, user),
+            c.message.chat.id,
+            c.message.message_id,
+            reply_markup=zikr_counter_menu(zikr_key, user)
+        )
+
+    elif data.startswith("reset|"):
+        zikr_key = data.split("|")[1]
+        user["total"] -= user["counts"][zikr_key]
+        user["counts"][zikr_key] = 0
+        save_data(DATA)
+        bot.edit_message_text(
+            format_zikr_text(zikr_key, user),
+            c.message.chat.id,
+            c.message.message_id,
+            reply_markup=zikr_counter_menu(zikr_key, user)
+        )
+
+    bot.answer_callback_query(c.id)
+
+# ===================== RUN =====================
+print("📿 Zikr Bot is running...")
+bot.infinity_polling(skip_pending=True)
