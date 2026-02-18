@@ -132,7 +132,8 @@ def main_menu():
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
         InlineKeyboardButton("📿 تسبيح", callback_data="menu_inc"),
-        InlineKeyboardButton("📖 أذكار ثابتة", callback_data="menu_seq")
+        InlineKeyboardButton("📖 أذكار ثابتة", callback_data="menu_seq"),
+        InlineKeyboardButton("📊 الإحصائيات", callback_data="menu_stats")
     )
     return kb
 
@@ -183,6 +184,23 @@ def format_sequence_text(key, user):
         f"╚══════════╝"
     )
 
+def format_stats(user):
+    lines = ["<b>📊 إحصائياتك الإجمالية:</b>\n"]
+    lines.append("<b>📿 التسبيح:</b>")
+    for k, v in AZKAR_INC.items():
+        lines.append(f"{v['emoji']} {v['name']} : <b>{digital(user['counts_inc'][k])}</b>")
+    lines.append(f"\n✨ مجموع التسبيح: <b>{digital(user['total_inc'])}</b>\n")
+    lines.append("<b>📖 الأذكار الثابتة (المنجزة حالياً):</b>")
+    for k, v in AZKAR_SEQUENCES.items():
+        progress = user["sequence_progress"].get(k)
+        if progress:
+            done = sum(item["count"] for item in AZKAR_SEQUENCES[k]["items"][:progress["index"]])
+            done += (AZKAR_SEQUENCES[k]["items"][progress["index"]]["count"] - progress["remaining"]) if progress["index"] < len(AZKAR_SEQUENCES[k]["items"]) else 0
+        else:
+            done = 0
+        lines.append(f"{v['emoji']} {v['name']} : <b>{digital(done)}</b>")
+    return "\n".join(lines)
+
 # ===================== HANDLERS =====================
 
 @bot.message_handler(commands=["start"])
@@ -196,7 +214,6 @@ def callbacks(c):
     user = get_user(uid)
     data = c.data
 
-    # تسبيح
     if data == "menu_inc":
         kb = InlineKeyboardMarkup(row_width=2)
         for k, v in AZKAR_INC.items():
@@ -236,7 +253,6 @@ def callbacks(c):
                               c.message.chat.id, c.message.message_id,
                               reply_markup=inc_menu(key))
 
-    # أذكار متسلسلة
     elif data == "menu_seq":
         kb = InlineKeyboardMarkup(row_width=2)
         for k, v in AZKAR_SEQUENCES.items():
@@ -283,6 +299,9 @@ def callbacks(c):
                               c.message.chat.id,
                               c.message.message_id,
                               reply_markup=seq_menu(key))
+
+    elif data == "menu_stats":
+        bot.send_message(c.message.chat.id, format_stats(user), reply_markup=main_menu())
 
     elif data == "back_main":
         bot.send_message(c.message.chat.id, "📿 <b>القائمة الرئيسية</b>", reply_markup=main_menu())
