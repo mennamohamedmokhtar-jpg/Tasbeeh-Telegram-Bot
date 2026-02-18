@@ -1,118 +1,127 @@
+# -*- coding: utf-8 -*-
+
+import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import sqlite3
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# ================== TOKEN ==================
-TOKEN = os.getenv("8500926319:AAGTRh-neXMwUrBOrzUFkOOEEclXKXSLg8c")
+# ================= BOT INIT =================
+TOKEN = os.getenv("BOT_TOKEN")
+bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 
-# ================== DATABASE ==================
-conn = sqlite3.connect("tasbeeh.db", check_same_thread=False)
-cursor = conn.cursor()
+# ================= DATABASE =================
+db = sqlite3.connect("tasbeeh.db", check_same_thread=False)
+cur = db.cursor()
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS zikr (
+cur.execute("""
+CREATE TABLE IF NOT EXISTS tasbeeh (
     user_id INTEGER,
     zikr TEXT,
     count INTEGER,
     PRIMARY KEY (user_id, zikr)
 )
 """)
-conn.commit()
+db.commit()
 
-def add_zikr(user_id, zikr):
-    cursor.execute(
-        "SELECT count FROM zikr WHERE user_id=? AND zikr=?",
-        (user_id, zikr)
+def add_zikr(uid, zikr):
+    cur.execute(
+        "SELECT count FROM tasbeeh WHERE user_id=? AND zikr=?",
+        (uid, zikr)
     )
-    row = cursor.fetchone()
+    row = cur.fetchone()
 
     if row:
-        cursor.execute(
-            "UPDATE zikr SET count = count + 1 WHERE user_id=? AND zikr=?",
-            (user_id, zikr)
+        cur.execute(
+            "UPDATE tasbeeh SET count = count + 1 WHERE user_id=? AND zikr=?",
+            (uid, zikr)
         )
     else:
-        cursor.execute(
-            "INSERT INTO zikr (user_id, zikr, count) VALUES (?, ?, 1)",
-            (user_id, zikr)
+        cur.execute(
+            "INSERT INTO tasbeeh (user_id, zikr, count) VALUES (?, ?, 1)",
+            (uid, zikr)
         )
-    conn.commit()
+    db.commit()
 
-def get_stats(user_id):
-    cursor.execute(
-        "SELECT zikr, count FROM zikr WHERE user_id=?",
-        (user_id,)
+def get_stats(uid):
+    cur.execute(
+        "SELECT zikr, count FROM tasbeeh WHERE user_id=?",
+        (uid,)
     )
-    return cursor.fetchall()
+    return cur.fetchall()
 
-# ================== BOT UI ==================
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🤍 الصلاة على النبي", callback_data="salat")],
-        [InlineKeyboardButton("🌿 استغفار", callback_data="istighfar")],
-        [InlineKeyboardButton("📿 تسبيح", callback_data="tasbeeh")],
-        [InlineKeyboardButton("✨ حوقلة", callback_data="hawqala")],
-        [InlineKeyboardButton("📊 الإحصائيات", callback_data="stats")]
-    ]
+# ================= ZIKR DATA =================
+ZIKR = {
+    "salat": "🤍 الصلاة على النبي ﷺ",
+    "istighfar": "🌿 الاستغفار",
+    "tasbeeh": "📿 التسبيح",
+    "hawqala": "✨ لا حول ولا قوة إلا بالله"
+}
 
-    await update.message.reply_text(
-        "📿 اختر الذكر:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+# ================= KEYBOARDS =================
+def main_kb():
+    kb = InlineKeyboardMarkup(row_width=2)
+    for k, v in ZIKR.items():
+        kb.add(InlineKeyboardButton(v, callback_data=f"zikr|{k}"))
+    kb.add(InlineKeyboardButton("📊 الإحصائيات", callback_data="stats"))
+    return kb
+
+def zikr_kb(z):
+    kb = InlineKeyboardMarkup()
+    kb.add(
+        InlineKeyboardButton("➕ تسبيحة", callback_data=f"add|{z}"),
+        InlineKeyboardButton("🔙 رجوع", callback_data="back")
+    )
+    return kb
+
+# ================= HANDLERS =================
+@bot.message_handler(commands=["start"])
+def start(msg):
+    bot.send_message(
+        msg.chat.id,
+        "📿 سبحتك الإلكترونية\n\nاختار الذكر:",
+        reply_markup=main_kb()
     )
 
-async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+@bot.callback_query_handler(func=lambda c: True)
+def cb(c):
+    uid = c.from_user.id
+    data = c.data.split("|")
 
-    user_id = query.from_user.id
-    data = query.data
-
-    zikr_names = {
-        "salat": "الصلاة على النبي ﷺ",
-        "istighfar": "الاستغفار",
-        "tasbeeh": "التسبيح",
-        "hawqala": "لا حول ولا قوة إلا بالله"
-    }
-
-    if data == "stats":
-        stats = get_stats(user_id)
-        if not stats:
-            text = "📭 لم تقم بأي ذكر بعد"
-        else:
-            text = "📊 إحصائياتك:\n\n"
-            for z, c in stats:
-                text += f"🔹 {z} : {c}\n"
-
-        await query.edit_message_text(text)
-        return
-
-    if data == "back":
-        await start(update, context)
-        return
+    # اختيار ذكر
+    if data[0] == "zikr":
+        z = data[1]
+        bot.send_message(
+            c.message.chat.id,
+            f"{ZIKR[z]}\n\nاضغط للعدّ 👇",
+            reply_markup=zikr_kb(z)
+        )
 
     # زيادة العداد
-    add_zikr(user_id, zikr_names[data])
+    elif data[0] == "add":
+        z = data[1]
+        add_zikr(uid, ZIKR[z])
+        bot.answer_callback_query(c.id, "✔️ تم العد")
 
-    keyboard = [
-        [InlineKeyboardButton("➕ تسبيحة", callback_data=data)],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="back")]
-    ]
+    # إحصائيات
+    elif data[0] == "stats":
+        stats = get_stats(uid)
+        if not stats:
+            text = "📭 لا توجد أذكار بعد"
+        else:
+            text = "📊 إحصائياتك:\n\n"
+            for z, c_ in stats:
+                text += f"{z} : <b>{c_}</b>\n"
 
-    await query.edit_message_text(
-        f"🧮 {zikr_names[data]}\nاضغط للعدّ",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+        bot.send_message(c.message.chat.id, text)
 
-# ================== RUN ==================
-def main():
-    app = ApplicationBuilder().token(TOKEN).build()
+    # رجوع
+    elif data[0] == "back":
+        bot.send_message(
+            c.message.chat.id,
+            "📿 اختار الذكر:",
+            reply_markup=main_kb()
+        )
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(buttons))
-
-    print("Bot is running...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+# ================= RUN =================
+print("📿 Tasbeeh Bot is running...")
+bot.infinity_polling(skip_pending=True)
