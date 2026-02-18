@@ -19,7 +19,9 @@ DEFAULT_DATA = {
     "users": {}
 }
 
-# أذكار تصاعدية (تسبيح)
+# ===================== AZKAR =====================
+
+# تسبيح (تصاعدي)
 AZKAR_INC = {
     "tasbeeh": {"name": "سبحان الله", "emoji": "🟢"},
     "tahmeed": {"name": "الحمد لله", "emoji": "🔵"},
@@ -29,15 +31,64 @@ AZKAR_INC = {
     "salat": {"name": "اللهم صلِّ على محمد ﷺ", "emoji": "🤍"}
 }
 
-# أذكار تنازلية (ثابتة بعدد)
-AZKAR_DEC = {
-    "morning": {"name": "أذكار الصباح", "emoji": "🌅", "max": 33},
-    "evening": {"name": "أذكار المساء", "emoji": "🌇", "max": 33},
-    "after_prayer": {"name": "أذكار بعد الصلاة", "emoji": "🕌", "max": 33},
-    "sleep": {"name": "أذكار النوم", "emoji": "🌙", "max": 33}
+# أذكار ثابتة (متسلسلة)
+AZKAR_SEQUENCES = {
+
+    "morning": {
+        "name": "أذكار الصباح",
+        "emoji": "🌅",
+        "items": [
+            {"text": "آية الكرسي", "count": 1},
+            {"text": "سورة الإخلاص", "count": 3},
+            {"text": "سورة الفلق", "count": 3},
+            {"text": "سورة الناس", "count": 3},
+            {"text": "أصبحنا وأصبح الملك لله", "count": 1},
+            {"text": "اللهم بك أصبحنا", "count": 1},
+            {"text": "سبحان الله وبحمده", "count": 100}
+        ]
+    },
+
+    "evening": {
+        "name": "أذكار المساء",
+        "emoji": "🌇",
+        "items": [
+            {"text": "آية الكرسي", "count": 1},
+            {"text": "سورة الإخلاص", "count": 3},
+            {"text": "سورة الفلق", "count": 3},
+            {"text": "سورة الناس", "count": 3},
+            {"text": "أمسينا وأمسى الملك لله", "count": 1},
+            {"text": "اللهم بك أمسينا", "count": 1},
+            {"text": "سبحان الله وبحمده", "count": 100}
+        ]
+    },
+
+    "after_prayer": {
+        "name": "أذكار بعد الصلاة",
+        "emoji": "🕌",
+        "items": [
+            {"text": "أستغفر الله", "count": 3},
+            {"text": "اللهم أنت السلام", "count": 1},
+            {"text": "سبحان الله", "count": 33},
+            {"text": "الحمد لله", "count": 33},
+            {"text": "الله أكبر", "count": 34}
+        ]
+    },
+
+    "sleep": {
+        "name": "أذكار النوم",
+        "emoji": "🌙",
+        "items": [
+            {"text": "آية الكرسي", "count": 1},
+            {"text": "باسمك ربي وضعت جنبي", "count": 1},
+            {"text": "سبحان الله", "count": 33},
+            {"text": "الحمد لله", "count": 33},
+            {"text": "الله أكبر", "count": 34}
+        ]
+    }
 }
 
 # ===================== STORAGE =====================
+
 def load_data():
     if not os.path.exists(DATA_FILE):
         save_data(DEFAULT_DATA)
@@ -58,14 +109,15 @@ def get_user(uid):
     if uid not in DATA["users"]:
         DATA["users"][uid] = {
             "counts_inc": {k: 0 for k in AZKAR_INC.keys()},
-            "counts_dec": {k: v["max"] for k, v in AZKAR_DEC.items()},
             "total_inc": 0,
+            "sequence_progress": {},
             "created": int(time.time())
         }
         save_data(DATA)
     return DATA["users"][uid]
 
-# ===================== DIGITAL COUNTER =====================
+# ===================== DIGITAL =====================
+
 DIGITS = {
     "0": "𝟎", "1": "𝟏", "2": "𝟐", "3": "𝟑", "4": "𝟒",
     "5": "𝟓", "6": "𝟔", "7": "𝟕", "8": "𝟖", "9": "𝟗"
@@ -75,27 +127,13 @@ def digital(n):
     return "".join(DIGITS.get(d, d) for d in str(n))
 
 # ===================== UI =====================
+
 def main_menu():
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
         InlineKeyboardButton("📿 تسبيح", callback_data="menu_inc"),
-        InlineKeyboardButton("📖 أذكار ثابتة", callback_data="menu_dec"),
-        InlineKeyboardButton("📊 الإحصائيات", callback_data="menu_stats")
+        InlineKeyboardButton("📖 أذكار ثابتة", callback_data="menu_seq")
     )
-    return kb
-
-def inc_list_menu():
-    kb = InlineKeyboardMarkup(row_width=2)
-    for k, v in AZKAR_INC.items():
-        kb.add(InlineKeyboardButton(f"{v['emoji']} {v['name']}", callback_data=f"inc|{k}"))
-    kb.add(InlineKeyboardButton("🏠 الرئيسية", callback_data="back_main"))
-    return kb
-
-def dec_list_menu():
-    kb = InlineKeyboardMarkup(row_width=2)
-    for k, v in AZKAR_DEC.items():
-        kb.add(InlineKeyboardButton(f"{v['emoji']} {v['name']}", callback_data=f"dec|{k}"))
-    kb.add(InlineKeyboardButton("🏠 الرئيسية", callback_data="back_main"))
     return kb
 
 def inc_menu(key):
@@ -105,64 +143,52 @@ def inc_menu(key):
         InlineKeyboardButton("➖", callback_data=f"inc_sub|{key}"),
         InlineKeyboardButton("🔄", callback_data=f"inc_reset|{key}")
     )
-    kb.add(InlineKeyboardButton("📿 رجوع لتسبيح", callback_data="menu_inc"))
+    kb.add(InlineKeyboardButton("🏠 الرئيسية", callback_data="back_main"))
     return kb
 
-def dec_menu(key):
-    kb = InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        InlineKeyboardButton("➖", callback_data=f"dec_sub|{key}"),
-        InlineKeyboardButton("🔄", callback_data=f"dec_reset|{key}")
-    )
-    kb.add(InlineKeyboardButton("📖 رجوع للأذكار", callback_data="menu_dec"))
+def seq_menu(key):
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton("➖ إنقاص", callback_data=f"seq_sub|{key}"))
+    kb.add(InlineKeyboardButton("🏠 الرئيسية", callback_data="back_main"))
     return kb
 
-# ===================== HELPERS =====================
+# ===================== FORMAT =====================
+
 def format_inc_text(key, user):
     z = AZKAR_INC[key]
     count = user["counts_inc"][key]
     total = user["total_inc"]
     return (
         f"{z['emoji']} <b>{z['name']}</b>\n\n"
-        f"╔══════════════╗\n"
-        f"     {digital(count)}\n"
-        f"╚══════════════╝\n\n"
-        f"✨ إجمالي: <b>{digital(total)}</b>"
+        f"╔══════════╗\n"
+        f"   {digital(count)}\n"
+        f"╚══════════╝\n\n"
+        f"✨ الإجمالي: {digital(total)}"
     )
 
-def format_dec_text(key, user):
-    z = AZKAR_DEC[key]
-    remaining = user["counts_dec"][key]
-    max_count = z["max"]
-    done = max_count - remaining
+def format_sequence_text(key, user):
+    seq = AZKAR_SEQUENCES[key]
+    progress = user["sequence_progress"].get(key, {"index": 0, "remaining": seq["items"][0]["count"]})
+    index = progress["index"]
+
+    if index >= len(seq["items"]):
+        return "✅ <b>تمت الأذكار كاملة</b>\n\nبارك الله لك وجعله في ميزان حسناتك 🤍"
+
+    item = seq["items"][index]
     return (
-        f"{z['emoji']} <b>{z['name']}</b>\n\n"
-        f"╔══════════════╗\n"
-        f"     {digital(remaining)}\n"
-        f"╚══════════════╝\n\n"
-        f"✅ المنجز: <b>{digital(done)}</b> / {digital(max_count)}"
+        f"{seq['emoji']} <b>{seq['name']}</b>\n\n"
+        f"<b>{item['text']}</b>\n\n"
+        f"╔══════════╗\n"
+        f"   {digital(progress['remaining'])}\n"
+        f"╚══════════╝"
     )
-
-def format_stats(user):
-    lines = ["<b>📊 إحصائياتك:</b>\n"]
-    lines.append("<b>📿 تسبيح:</b>")
-    for k, v in AZKAR_INC.items():
-        lines.append(f"{v['emoji']} {v['name']} : <b>{digital(user['counts_inc'][k])}</b>")
-    lines.append(f"\n✨ الإجمالي: <b>{digital(user['total_inc'])}</b>\n")
-    lines.append("<b>📖 الأذكار الثابتة:</b>")
-    for k, v in AZKAR_DEC.items():
-        lines.append(f"{v['emoji']} {v['name']} : المتبقي <b>{digital(user['counts_dec'][k])}</b>")
-    return "\n".join(lines)
 
 # ===================== HANDLERS =====================
+
 @bot.message_handler(commands=["start"])
 def start(m):
     get_user(m.from_user.id)
-    bot.send_message(
-        m.chat.id,
-        "📿 <b>القائمة الرئيسية</b>",
-        reply_markup=main_menu()
-    )
+    bot.send_message(m.chat.id, "📿 <b>القائمة الرئيسية</b>", reply_markup=main_menu())
 
 @bot.callback_query_handler(func=lambda c: True)
 def callbacks(c):
@@ -170,39 +196,26 @@ def callbacks(c):
     user = get_user(uid)
     data = c.data
 
+    # تسبيح
     if data == "menu_inc":
-        bot.send_message(c.message.chat.id, "📿 <b>قائمة التسبيح</b>", reply_markup=inc_list_menu())
-
-    elif data == "menu_dec":
-        bot.send_message(c.message.chat.id, "📖 <b>قائمة الأذكار الثابتة</b>", reply_markup=dec_list_menu())
+        kb = InlineKeyboardMarkup(row_width=2)
+        for k, v in AZKAR_INC.items():
+            kb.add(InlineKeyboardButton(f"{v['emoji']} {v['name']}", callback_data=f"inc|{k}"))
+        kb.add(InlineKeyboardButton("🏠 الرئيسية", callback_data="back_main"))
+        bot.send_message(c.message.chat.id, "📿 <b>التسبيح</b>", reply_markup=kb)
 
     elif data.startswith("inc|"):
         key = data.split("|")[1]
-        bot.send_message(
-            c.message.chat.id,
-            format_inc_text(key, user),
-            reply_markup=inc_menu(key)
-        )
-
-    elif data.startswith("dec|"):
-        key = data.split("|")[1]
-        bot.send_message(
-            c.message.chat.id,
-            format_dec_text(key, user),
-            reply_markup=dec_menu(key)
-        )
+        bot.send_message(c.message.chat.id, format_inc_text(key, user), reply_markup=inc_menu(key))
 
     elif data.startswith("inc_add|"):
         key = data.split("|")[1]
         user["counts_inc"][key] += 1
         user["total_inc"] += 1
         save_data(DATA)
-        bot.edit_message_text(
-            format_inc_text(key, user),
-            c.message.chat.id,
-            c.message.message_id,
-            reply_markup=inc_menu(key)
-        )
+        bot.edit_message_text(format_inc_text(key, user),
+                              c.message.chat.id, c.message.message_id,
+                              reply_markup=inc_menu(key))
 
     elif data.startswith("inc_sub|"):
         key = data.split("|")[1]
@@ -210,61 +223,69 @@ def callbacks(c):
             user["counts_inc"][key] -= 1
             user["total_inc"] -= 1
         save_data(DATA)
-        bot.edit_message_text(
-            format_inc_text(key, user),
-            c.message.chat.id,
-            c.message.message_id,
-            reply_markup=inc_menu(key)
-        )
+        bot.edit_message_text(format_inc_text(key, user),
+                              c.message.chat.id, c.message.message_id,
+                              reply_markup=inc_menu(key))
 
     elif data.startswith("inc_reset|"):
         key = data.split("|")[1]
         user["total_inc"] -= user["counts_inc"][key]
         user["counts_inc"][key] = 0
         save_data(DATA)
-        bot.edit_message_text(
-            format_inc_text(key, user),
-            c.message.chat.id,
-            c.message.message_id,
-            reply_markup=inc_menu(key)
-        )
+        bot.edit_message_text(format_inc_text(key, user),
+                              c.message.chat.id, c.message.message_id,
+                              reply_markup=inc_menu(key))
 
-    elif data.startswith("dec_sub|"):
+    # أذكار متسلسلة
+    elif data == "menu_seq":
+        kb = InlineKeyboardMarkup(row_width=2)
+        for k, v in AZKAR_SEQUENCES.items():
+            kb.add(InlineKeyboardButton(f"{v['emoji']} {v['name']}", callback_data=f"seq|{k}"))
+        kb.add(InlineKeyboardButton("🏠 الرئيسية", callback_data="back_main"))
+        bot.send_message(c.message.chat.id, "📖 <b>الأذكار الثابتة</b>", reply_markup=kb)
+
+    elif data.startswith("seq|"):
         key = data.split("|")[1]
-        if user["counts_dec"][key] > 0:
-            user["counts_dec"][key] -= 1
+        first_item = AZKAR_SEQUENCES[key]["items"][0]
+        user["sequence_progress"][key] = {"index": 0, "remaining": first_item["count"]}
         save_data(DATA)
-        bot.edit_message_text(
-            format_dec_text(key, user),
-            c.message.chat.id,
-            c.message.message_id,
-            reply_markup=dec_menu(key)
-        )
+        bot.send_message(c.message.chat.id, format_sequence_text(key, user), reply_markup=seq_menu(key))
 
-    elif data.startswith("dec_reset|"):
+    elif data.startswith("seq_sub|"):
         key = data.split("|")[1]
-        user["counts_dec"][key] = AZKAR_DEC[key]["max"]
-        save_data(DATA)
-        bot.edit_message_text(
-            format_dec_text(key, user),
-            c.message.chat.id,
-            c.message.message_id,
-            reply_markup=dec_menu(key)
-        )
+        seq = AZKAR_SEQUENCES[key]
+        progress = user["sequence_progress"].get(key)
 
-    elif data == "menu_stats":
-        bot.send_message(
-            c.message.chat.id,
-            format_stats(user),
-            reply_markup=main_menu()
-        )
+        if not progress:
+            return
+
+        if progress["remaining"] > 0:
+            progress["remaining"] -= 1
+
+        if progress["remaining"] == 0:
+            progress["index"] += 1
+            if progress["index"] < len(seq["items"]):
+                next_item = seq["items"][progress["index"]]
+                progress["remaining"] = next_item["count"]
+            else:
+                user["sequence_progress"][key] = progress
+                save_data(DATA)
+                bot.edit_message_text(
+                    "✅ <b>تمت الأذكار كاملة</b>\n\nبارك الله لك وجعله في ميزان حسناتك 🤍",
+                    c.message.chat.id,
+                    c.message.message_id
+                )
+                return
+
+        user["sequence_progress"][key] = progress
+        save_data(DATA)
+        bot.edit_message_text(format_sequence_text(key, user),
+                              c.message.chat.id,
+                              c.message.message_id,
+                              reply_markup=seq_menu(key))
 
     elif data == "back_main":
-        bot.send_message(
-            c.message.chat.id,
-            "📿 <b>القائمة الرئيسية</b>",
-            reply_markup=main_menu()
-        )
+        bot.send_message(c.message.chat.id, "📿 <b>القائمة الرئيسية</b>", reply_markup=main_menu())
 
     bot.answer_callback_query(c.id)
 
