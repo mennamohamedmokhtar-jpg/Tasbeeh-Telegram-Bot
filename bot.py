@@ -7,6 +7,9 @@ import os
 
 # ================= BOT INIT =================
 TOKEN = os.getenv("BOT_TOKEN")
+if not TOKEN:
+    raise Exception("BOT_TOKEN is not set")
+
 bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 
 # ================= DATABASE =================
@@ -24,7 +27,16 @@ CREATE TABLE IF NOT EXISTS zikr (
 """)
 db.commit()
 
-def add_zikr(uid, key, name):
+# ================= DB FUNCTIONS =================
+def get_count(uid, key):
+    cur.execute(
+        "SELECT count FROM zikr WHERE user_id=? AND zikr_key=?",
+        (uid, key)
+    )
+    row = cur.fetchone()
+    return row[0] if row else 0
+
+def add_count(uid, key, name):
     cur.execute(
         "SELECT count FROM zikr WHERE user_id=? AND zikr_key=?",
         (uid, key)
@@ -42,14 +54,6 @@ def add_zikr(uid, key, name):
             (uid, key, name)
         )
     db.commit()
-
-def get_count(uid, key):
-    cur.execute(
-        "SELECT count FROM zikr WHERE user_id=? AND zikr_key=?",
-        (uid, key)
-    )
-    row = cur.fetchone()
-    return row[0] if row else 0
 
 def get_stats(uid):
     cur.execute(
@@ -69,7 +73,7 @@ ZIKR = {
 
 # ================= KEYBOARDS =================
 def main_menu():
-    kb = InlineKeyboardMarkup(row_width=1)
+    kb = InlineKeyboardMarkup()
     kb.add(
         InlineKeyboardButton("📿 الأذكار", callback_data="menu_zikr"),
         InlineKeyboardButton("📊 الإحصائيات", callback_data="menu_stats")
@@ -79,20 +83,20 @@ def main_menu():
 def zikr_menu():
     kb = InlineKeyboardMarkup(row_width=2)
     for k, v in ZIKR.items():
-        kb.add(InlineKeyboardButton(v, callback_data=f"zikr|{k}"))
+        kb.add(InlineKeyboardButton(v, callback_data=f"zikr:{k}"))
     kb.add(InlineKeyboardButton("🔙 رجوع", callback_data="back_main"))
     return kb
 
-def zikr_counter_kb(key):
-    kb = InlineKeyboardMarkup(row_width=1)
+def counter_menu(key):
+    kb = InlineKeyboardMarkup()
     kb.add(
-        InlineKeyboardButton("➕ تسبيحة", callback_data=f"add|{key}"),
+        InlineKeyboardButton("➕ تسبيحة", callback_data=f"add:{key}"),
         InlineKeyboardButton("🔙 رجوع", callback_data="menu_zikr")
     )
     return kb
 
 def stats_menu():
-    kb = InlineKeyboardMarkup(row_width=1)
+    kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("🔙 رجوع", callback_data="back_main"))
     return kb
 
@@ -101,60 +105,76 @@ def stats_menu():
 def start(msg):
     bot.send_message(
         msg.chat.id,
-        "📿 سبحتك الإلكترونية\n\nاختار من القائمة:",
+        "📿 <b>سبحتك الإلكترونية</b>\n\nاختر من القائمة:",
         reply_markup=main_menu()
     )
 
 @bot.callback_query_handler(func=lambda c: True)
-def cb(c):
+def callbacks(c):
     uid = c.from_user.id
-    data = c.data.split("|")
+    data = c.data
 
-    # ---------- MAIN MENUS ----------
-    if c.data == "menu_zikr":
-        bot.send_message(c.message.chat.id, "📿 اختر الذكر:", reply_markup=zikr_menu())
+    # ---------- MAIN ----------
+    if data == "menu_zikr":
+        bot.edit_message_text(
+            "📿 اختر الذكر:",
+            c.message.chat.id,
+            c.message.message_id,
+            reply_markup=zikr_menu()
+        )
 
-    elif c.data == "menu_stats":
+    elif data == "menu_stats":
         stats = get_stats(uid)
         if not stats:
             text = "📭 لا توجد أذكار بعد"
         else:
-            text = "📊 إحصائياتك منذ بداية الاستخدام:\n\n"
+            text = "📊 <b>إحصائياتك:</b>\n\n"
             for name, count in stats:
                 text += f"{name} : <b>{count}</b>\n"
 
-        bot.send_message(c.message.chat.id, text, reply_markup=stats_menu())
-
-    elif c.data == "back_main":
-        bot.send_message(c.message.chat.id, "🔙 القائمة الرئيسية:", reply_markup=main_menu())
-
-    # ---------- ZIKR SELECT ----------
-    elif data[0] == "zikr":
-        key = data[1]
-        name = ZIKR[key]
-        count = get_count(uid, key)
-
-        bot.send_message(
+        bot.edit_message_text(
+            text,
             c.message.chat.id,
-            f"{name}\n\n🧮 العدد الحالي: <b>{count}</b>",
-            reply_markup=zikr_counter_kb(key)
+            c.message.message_id,
+            reply_markup=stats_menu()
         )
 
-    # ---------- ADD COUNT ----------
-    elif data[0] == "add":
-        key = data[1]
-        name = ZIKR[key]
+    elif data == "back_main":
+        bot.edit_message_text(
+            "🔙 القائمة الرئيسية:",
+            c.message.chat.id,
+            c.message.message_id,
+            reply_markup=main_menu()
+        )
 
-        add_zikr(uid, key, name)
+    # ---------- SELECT ZIKR ----------
+    elif data.startswith("zikr:"):
+        key = data.split(":")[1]
+        name = ZIKR[key]
         count = get_count(uid, key)
 
         bot.edit_message_text(
-            chat_id=c.message.chat.id,
-            message_id=c.message.message_id,
-            text=f"{name}\n\n🧮 العدد الحالي: <b>{count}</b>",
-            reply_markup=zikr_counter_kb(key)
+            f"{name}\n\n🧮 العدد الحالي: <b>{count}</b>",
+            c.message.chat.id,
+            c.message.message_id,
+            reply_markup=counter_menu(key)
+        )
+
+    # ---------- ADD COUNT ----------
+    elif data.startswith("add:"):
+        key = data.split(":")[1]
+        name = ZIKR[key]
+
+        add_count(uid, key, name)
+        count = get_count(uid, key)
+
+        bot.edit_message_text(
+            f"{name}\n\n🧮 العدد الحالي: <b>{count}</b>",
+            c.message.chat.id,
+            c.message.message_id,
+            reply_markup=counter_menu(key)
         )
 
 # ================= RUN =================
-print("📿 Tasbeeh Bot running...")
+print("📿 Tasbeeh Bot is running...")
 bot.infinity_polling(skip_pending=True)
