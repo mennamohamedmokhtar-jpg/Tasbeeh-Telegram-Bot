@@ -37,22 +37,16 @@ def get_count(uid, key):
     return row[0] if row else 0
 
 def add_count(uid, key, name):
-    cur.execute(
-        "SELECT count FROM zikr WHERE user_id=? AND zikr_key=?",
-        (uid, key)
-    )
-    row = cur.fetchone()
-
-    if row:
+    if get_count(uid, key) == 0:
         cur.execute(
-            "UPDATE zikr SET count = count + 1 WHERE user_id=? AND zikr_key=?",
-            (uid, key)
-        )
-    else:
-        cur.execute(
-            "INSERT INTO zikr (user_id, zikr_key, zikr_name, count) VALUES (?, ?, ?, 1)",
+            "INSERT OR IGNORE INTO zikr VALUES (?, ?, ?, 0)",
             (uid, key, name)
         )
+
+    cur.execute(
+        "UPDATE zikr SET count = count + 1 WHERE user_id=? AND zikr_key=?",
+        (uid, key)
+    )
     db.commit()
 
 def get_stats(uid):
@@ -72,12 +66,12 @@ ZIKR = {
 }
 
 # ================= FORMAT =================
-def pretty_count(n):
+def pretty(n):
     return f"✨ <b>{n:,}</b> ✨"
 
 # ================= KEYBOARDS =================
 def main_menu():
-    kb = InlineKeyboardMarkup(row_width=1)
+    kb = InlineKeyboardMarkup()
     kb.add(
         InlineKeyboardButton("📿 الأذكار", callback_data="menu_zikr"),
         InlineKeyboardButton("📊 الإحصائيات", callback_data="menu_stats")
@@ -87,21 +81,16 @@ def main_menu():
 def zikr_menu():
     kb = InlineKeyboardMarkup(row_width=2)
     for k, v in ZIKR.items():
-        kb.add(InlineKeyboardButton(v, callback_data=f"zikr:{k}"))
-    kb.add(InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="back_main"))
+        kb.add(InlineKeyboardButton(v, callback_data=f"open:{k}"))
+    kb.add(InlineKeyboardButton("🔙 الرئيسية", callback_data="menu_main"))
     return kb
 
-def counter_menu(key):
-    kb = InlineKeyboardMarkup(row_width=1)
+def counter_kb(key):
+    kb = InlineKeyboardMarkup()
     kb.add(
         InlineKeyboardButton("➕ تسبيحة", callback_data=f"add:{key}"),
         InlineKeyboardButton("📿 باقي الأذكار", callback_data="menu_zikr")
     )
-    return kb
-
-def stats_menu():
-    kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="back_main"))
     return kb
 
 # ================= HANDLERS =================
@@ -109,17 +98,24 @@ def stats_menu():
 def start(msg):
     bot.send_message(
         msg.chat.id,
-        "📿 <b>سبحتك الإلكترونية</b>\n\nاختر من القوائم:",
+        "📿 <b>سبحتك الإلكترونية</b>\nاختر:",
         reply_markup=main_menu()
     )
 
 @bot.callback_query_handler(func=lambda c: True)
-def callbacks(c):
+def cb(c):
     uid = c.from_user.id
     data = c.data
 
-    # ---------- MENUS ----------
-    if data == "menu_zikr":
+    # -------- MENUS --------
+    if data == "menu_main":
+        bot.send_message(
+            c.message.chat.id,
+            "🏠 القائمة الرئيسية:",
+            reply_markup=main_menu()
+        )
+
+    elif data == "menu_zikr":
         bot.send_message(
             c.message.chat.id,
             "📿 اختر الذكر:",
@@ -129,38 +125,27 @@ def callbacks(c):
     elif data == "menu_stats":
         stats = get_stats(uid)
         if not stats:
-            text = "📭 <b>لا توجد أذكار بعد</b>"
+            text = "📭 لا توجد أذكار بعد"
         else:
-            text = "📊 <b>إحصائياتك منذ البداية</b>\n\n"
-            for name, count in stats:
-                text += f"{name}\n{pretty_count(count)}\n\n"
+            text = "📊 <b>إحصائياتك</b>\n\n"
+            for n, c_ in stats:
+                text += f"{n}\n{pretty(c_)}\n\n"
 
-        bot.send_message(
-            c.message.chat.id,
-            text,
-            reply_markup=stats_menu()
-        )
+        bot.send_message(c.message.chat.id, text)
 
-    elif data == "back_main":
-        bot.send_message(
-            c.message.chat.id,
-            "🔙 القائمة الرئيسية:",
-            reply_markup=main_menu()
-        )
-
-    # ---------- SELECT ZIKR ----------
-    elif data.startswith("zikr:"):
+    # -------- OPEN ZIKR --------
+    elif data.startswith("open:"):
         key = data.split(":")[1]
         name = ZIKR[key]
         count = get_count(uid, key)
 
         bot.send_message(
             c.message.chat.id,
-            f"{name}\n\n🧮 العداد الحالي\n{pretty_count(count)}",
-            reply_markup=counter_menu(key)
+            f"{name}\n\n🧮 العداد الحالي\n{pretty(count)}",
+            reply_markup=counter_kb(key)
         )
 
-    # ---------- ADD COUNT ----------
+    # -------- ADD COUNT (EDIT SAME MESSAGE) --------
     elif data.startswith("add:"):
         key = data.split(":")[1]
         name = ZIKR[key]
@@ -168,12 +153,13 @@ def callbacks(c):
         add_count(uid, key, name)
         count = get_count(uid, key)
 
-        bot.send_message(
-            c.message.chat.id,
-            f"{name}\n\n🧮 العداد الحالي\n{pretty_count(count)}",
-            reply_markup=counter_menu(key)
+        bot.edit_message_text(
+            chat_id=c.message.chat.id,
+            message_id=c.message.message_id,
+            text=f"{name}\n\n🧮 العداد الحالي\n{pretty(count)}",
+            reply_markup=counter_kb(key)
         )
 
 # ================= RUN =================
-print("📿 Tasbeeh Bot is running...")
+print("📿 Smart Tasbeeh Bot running...")
 bot.infinity_polling(skip_pending=True)
