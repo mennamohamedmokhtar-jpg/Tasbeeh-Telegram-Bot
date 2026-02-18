@@ -71,9 +71,13 @@ ZIKR = {
     "takbeer": "🕌 الله أكبر"
 }
 
+# ================= FORMAT =================
+def pretty_count(n):
+    return f"✨ <b>{n:,}</b> ✨"
+
 # ================= KEYBOARDS =================
 def main_menu():
-    kb = InlineKeyboardMarkup()
+    kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
         InlineKeyboardButton("📿 الأذكار", callback_data="menu_zikr"),
         InlineKeyboardButton("📊 الإحصائيات", callback_data="menu_stats")
@@ -84,20 +88,20 @@ def zikr_menu():
     kb = InlineKeyboardMarkup(row_width=2)
     for k, v in ZIKR.items():
         kb.add(InlineKeyboardButton(v, callback_data=f"zikr:{k}"))
-    kb.add(InlineKeyboardButton("🔙 رجوع", callback_data="back_main"))
+    kb.add(InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="back_main"))
     return kb
 
 def counter_menu(key):
-    kb = InlineKeyboardMarkup()
+    kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
         InlineKeyboardButton("➕ تسبيحة", callback_data=f"add:{key}"),
-        InlineKeyboardButton("🔙 رجوع", callback_data="menu_zikr")
+        InlineKeyboardButton("📿 باقي الأذكار", callback_data="menu_zikr")
     )
     return kb
 
 def stats_menu():
-    kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("🔙 رجوع", callback_data="back_main"))
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="back_main"))
     return kb
 
 # ================= HANDLERS =================
@@ -105,7 +109,7 @@ def stats_menu():
 def start(msg):
     bot.send_message(
         msg.chat.id,
-        "📿 <b>سبحتك الإلكترونية</b>\n\nاختر من القائمة:",
+        "📿 <b>سبحتك الإلكترونية</b>\n\nاختر من القوائم:",
         reply_markup=main_menu()
     )
 
@@ -114,36 +118,33 @@ def callbacks(c):
     uid = c.from_user.id
     data = c.data
 
-    # ---------- MAIN ----------
+    # ---------- MENUS ----------
     if data == "menu_zikr":
-        bot.edit_message_text(
-            "📿 اختر الذكر:",
+        bot.send_message(
             c.message.chat.id,
-            c.message.message_id,
+            "📿 اختر الذكر:",
             reply_markup=zikr_menu()
         )
 
     elif data == "menu_stats":
         stats = get_stats(uid)
         if not stats:
-            text = "📭 لا توجد أذكار بعد"
+            text = "📭 <b>لا توجد أذكار بعد</b>"
         else:
-            text = "📊 <b>إحصائياتك:</b>\n\n"
+            text = "📊 <b>إحصائياتك منذ البداية</b>\n\n"
             for name, count in stats:
-                text += f"{name} : <b>{count}</b>\n"
+                text += f"{name}\n{pretty_count(count)}\n\n"
 
-        bot.edit_message_text(
-            text,
+        bot.send_message(
             c.message.chat.id,
-            c.message.message_id,
+            text,
             reply_markup=stats_menu()
         )
 
     elif data == "back_main":
-        bot.edit_message_text(
-            "🔙 القائمة الرئيسية:",
+        bot.send_message(
             c.message.chat.id,
-            c.message.message_id,
+            "🔙 القائمة الرئيسية:",
             reply_markup=main_menu()
         )
 
@@ -153,10 +154,9 @@ def callbacks(c):
         name = ZIKR[key]
         count = get_count(uid, key)
 
-        bot.edit_message_text(
-            f"{name}\n\n🧮 العدد الحالي: <b>{count}</b>",
+        bot.send_message(
             c.message.chat.id,
-            c.message.message_id,
+            f"{name}\n\n🧮 العداد الحالي\n{pretty_count(count)}",
             reply_markup=counter_menu(key)
         )
 
@@ -168,10 +168,9 @@ def callbacks(c):
         add_count(uid, key, name)
         count = get_count(uid, key)
 
-        bot.edit_message_text(
-            f"{name}\n\n🧮 العدد الحالي: <b>{count}</b>",
+        bot.send_message(
             c.message.chat.id,
-            c.message.message_id,
+            f"{name}\n\n🧮 العداد الحالي\n{pretty_count(count)}",
             reply_markup=counter_menu(key)
         )
 
