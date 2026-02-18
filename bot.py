@@ -1,4 +1,3 @@
-```python
 # -*- coding: utf-8 -*-
 # ===================== IMPORTS =====================
 import telebot
@@ -15,10 +14,13 @@ bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 
 DATA_FILE = "data.json"
 
-# ===================== AZKAR CONFIG =====================
+# ===================== DATA =====================
+DEFAULT_DATA = {
+    "users": {}
+}
 
-# عداد تصاعدي (مثل الكود الأصلي)
-AZKAR_INCREMENT = {
+# أذكار تصاعدية (زي الكود الأصلي)
+AZKAR_INC = {
     "tasbeeh": {"name": "سبحان الله", "emoji": "🟢"},
     "tahmeed": {"name": "الحمد لله", "emoji": "🔵"},
     "takbeer": {"name": "الله أكبر", "emoji": "🟣"},
@@ -27,22 +29,23 @@ AZKAR_INCREMENT = {
     "salat": {"name": "اللهم صلِّ على محمد ﷺ", "emoji": "🤍"}
 }
 
-# عداد تنازلي (أذكار بعدد محدد)
-AZKAR_DECREMENT = {
+# أذكار تنازلية (بعدد ثابت)
+AZKAR_DEC = {
     "morning": {"name": "أذكار الصباح", "emoji": "🌅", "max": 33},
     "evening": {"name": "أذكار المساء", "emoji": "🌇", "max": 33},
-    "prayer": {"name": "أذكار بعد الصلاة", "emoji": "🕌", "max": 33},
+    "after_prayer": {"name": "أذكار بعد الصلاة", "emoji": "🕌", "max": 33},
     "sleep": {"name": "أذكار النوم", "emoji": "🌙", "max": 33}
 }
 
 # ===================== STORAGE =====================
-DEFAULT_DATA = {"users": {}}
-
 def load_data():
     if not os.path.exists(DATA_FILE):
         save_data(DEFAULT_DATA)
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return DEFAULT_DATA.copy()
 
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
@@ -54,8 +57,8 @@ def get_user(uid):
     uid = str(uid)
     if uid not in DATA["users"]:
         DATA["users"][uid] = {
-            "inc_counts": {k: 0 for k in AZKAR_INCREMENT.keys()},
-            "dec_counts": {k: v["max"] for k, v in AZKAR_DECREMENT.items()},
+            "counts_inc": {k: 0 for k in AZKAR_INC.keys()},
+            "counts_dec": {k: v["max"] for k, v in AZKAR_DEC.items()},
             "total_inc": 0,
             "created": int(time.time())
         }
@@ -63,14 +66,13 @@ def get_user(uid):
     return DATA["users"][uid]
 
 # ===================== UI =====================
-
 def main_menu():
     kb = InlineKeyboardMarkup(row_width=2)
 
-    for k, v in AZKAR_INCREMENT.items():
+    for k, v in AZKAR_INC.items():
         kb.add(InlineKeyboardButton(f"{v['emoji']} {v['name']}", callback_data=f"inc|{k}"))
 
-    for k, v in AZKAR_DECREMENT.items():
+    for k, v in AZKAR_DEC.items():
         kb.add(InlineKeyboardButton(f"{v['emoji']} {v['name']}", callback_data=f"dec|{k}"))
 
     kb.add(InlineKeyboardButton("📊 الإحصائيات", callback_data="menu_stats"))
@@ -89,17 +91,16 @@ def inc_menu(key):
 def dec_menu(key):
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton("✅ تم", callback_data=f"dec_done|{key}"),
+        InlineKeyboardButton("➖ إنقاص", callback_data=f"dec_sub|{key}"),
         InlineKeyboardButton("🔄 إعادة", callback_data=f"dec_reset|{key}")
     )
     kb.add(InlineKeyboardButton("🏠 القائمة الرئيسية", callback_data="back_main"))
     return kb
 
-# ===================== FORMATTERS =====================
-
+# ===================== HELPERS =====================
 def format_inc_text(key, user):
-    z = AZKAR_INCREMENT[key]
-    count = user["inc_counts"][key]
+    z = AZKAR_INC[key]
+    count = user["counts_inc"][key]
     total = user["total_inc"]
     return (
         f"{z['emoji']} <b>{z['name']}</b>\n\n"
@@ -108,8 +109,8 @@ def format_inc_text(key, user):
     )
 
 def format_dec_text(key, user):
-    z = AZKAR_DECREMENT[key]
-    remaining = user["dec_counts"][key]
+    z = AZKAR_DEC[key]
+    remaining = user["counts_dec"][key]
     max_count = z["max"]
     done = max_count - remaining
     return (
@@ -122,20 +123,18 @@ def format_stats(user):
     lines = ["<b>📊 إحصائياتك:</b>\n"]
 
     lines.append("<b>🔹 الأذكار التصاعدية:</b>")
-    for k, v in AZKAR_INCREMENT.items():
-        lines.append(f"{v['emoji']} {v['name']} : <b>{user['inc_counts'][k]:,}</b>")
+    for k, v in AZKAR_INC.items():
+        lines.append(f"{v['emoji']} {v['name']} : <b>{user['counts_inc'][k]:,}</b>")
 
     lines.append(f"\n✨ المجموع الكلي التصاعدي: <b>{user['total_inc']:,}</b>\n")
 
-    lines.append("<b>🔹 الأذكار التنازلية (الحالية):</b>")
-    for k, v in AZKAR_DECREMENT.items():
-        remaining = user["dec_counts"][k]
-        lines.append(f"{v['emoji']} {v['name']} : المتبقي <b>{remaining}</b>")
+    lines.append("<b>🔹 الأذكار التنازلية:</b>")
+    for k, v in AZKAR_DEC.items():
+        lines.append(f"{v['emoji']} {v['name']} : المتبقي <b>{user['counts_dec'][k]}</b>")
 
     return "\n".join(lines)
 
 # ===================== HANDLERS =====================
-
 @bot.message_handler(commands=["start"])
 def start(m):
     get_user(m.from_user.id)
@@ -151,7 +150,7 @@ def callbacks(c):
     user = get_user(uid)
     data = c.data
 
-    # ====== عرض التصاعدي ======
+    # ===== تصاعدي =====
     if data.startswith("inc|"):
         key = data.split("|")[1]
         bot.edit_message_text(
@@ -163,7 +162,7 @@ def callbacks(c):
 
     elif data.startswith("inc_add|"):
         key = data.split("|")[1]
-        user["inc_counts"][key] += 1
+        user["counts_inc"][key] += 1
         user["total_inc"] += 1
         save_data(DATA)
         bot.edit_message_text(
@@ -175,8 +174,8 @@ def callbacks(c):
 
     elif data.startswith("inc_sub|"):
         key = data.split("|")[1]
-        if user["inc_counts"][key] > 0:
-            user["inc_counts"][key] -= 1
+        if user["counts_inc"][key] > 0:
+            user["counts_inc"][key] -= 1
             user["total_inc"] -= 1
         save_data(DATA)
         bot.edit_message_text(
@@ -188,8 +187,8 @@ def callbacks(c):
 
     elif data.startswith("inc_reset|"):
         key = data.split("|")[1]
-        user["total_inc"] -= user["inc_counts"][key]
-        user["inc_counts"][key] = 0
+        user["total_inc"] -= user["counts_inc"][key]
+        user["counts_inc"][key] = 0
         save_data(DATA)
         bot.edit_message_text(
             format_inc_text(key, user),
@@ -198,7 +197,7 @@ def callbacks(c):
             reply_markup=inc_menu(key)
         )
 
-    # ====== عرض التنازلي ======
+    # ===== تنازلي =====
     elif data.startswith("dec|"):
         key = data.split("|")[1]
         bot.edit_message_text(
@@ -208,10 +207,10 @@ def callbacks(c):
             reply_markup=dec_menu(key)
         )
 
-    elif data.startswith("dec_done|"):
+    elif data.startswith("dec_sub|"):
         key = data.split("|")[1]
-        if user["dec_counts"][key] > 0:
-            user["dec_counts"][key] -= 1
+        if user["counts_dec"][key] > 0:
+            user["counts_dec"][key] -= 1
         save_data(DATA)
         bot.edit_message_text(
             format_dec_text(key, user),
@@ -222,7 +221,7 @@ def callbacks(c):
 
     elif data.startswith("dec_reset|"):
         key = data.split("|")[1]
-        user["dec_counts"][key] = AZKAR_DECREMENT[key]["max"]
+        user["counts_dec"][key] = AZKAR_DEC[key]["max"]
         save_data(DATA)
         bot.edit_message_text(
             format_dec_text(key, user),
@@ -252,6 +251,5 @@ def callbacks(c):
     bot.answer_callback_query(c.id)
 
 # ===================== RUN =====================
-print("📿 Advanced Zikr Bot running...")
+print("📿 Zikr Bot running...")
 bot.infinity_polling(skip_pending=True)
-```
