@@ -12,7 +12,7 @@ if not TOKEN:
 
 bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 DATA_FILE = "data.json"
-ADMIN_ID = 123456789
+ADMIN_ID = 5123695463
 
 # ===================== DATA =====================
 DEFAULT_DATA = {"users": {}}
@@ -213,3 +213,4 @@ def callbacks(c):
 # ===================== RUN =====================
 print("📿 Zikr Bot running...")
 bot.infinity_polling(skip_pending=True)
+
