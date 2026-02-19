@@ -118,14 +118,14 @@ def tasbeeh_menu():
     kb = InlineKeyboardMarkup(row_width=2)
     for k,v in AZKAR_TASBEEH.items():
         kb.add(InlineKeyboardButton(f"{v['emoji']} {v['name']}", callback_data=f"zikr|{k}"))
-    kb.add(InlineKeyboardButton("⬅️ رجوع", callback_data="back_main"))
+    kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
     return kb
 
 def fixed_menu():
     kb = InlineKeyboardMarkup(row_width=1)
     for k,v in AZKAR_FIXED.items():
         kb.add(InlineKeyboardButton(v["title"], callback_data=f"fixed|{k}"))
-    kb.add(InlineKeyboardButton("⬅️ رجوع", callback_data="back_main"))
+    kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
     return kb
 
 def tasbeeh_counter_menu(key):
@@ -135,13 +135,13 @@ def tasbeeh_counter_menu(key):
         InlineKeyboardButton("➖", callback_data=f"sub|{key}"),
         InlineKeyboardButton("🔄", callback_data=f"reset|{key}")
     )
-    kb.add(InlineKeyboardButton("⬅️ رجوع", callback_data="menu_tasbeeh"))
+    kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
     return kb
 
 def fixed_counter_menu(key):
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(InlineKeyboardButton("✔️ تم", callback_data=f"fixed_add|{key}"))
-    kb.add(InlineKeyboardButton("⬅️ رجوع", callback_data="menu_fixed"))
+    kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
     return kb
 
 # ===================== HELPERS =====================
@@ -197,27 +197,26 @@ def callbacks(c):
 
         # -------- MAIN MENUS --------
         if data == "menu_tasbeeh":
-            bot.edit_message_text("📿 اختر ذكر:", c.message.chat.id, c.message.message_id, reply_markup=tasbeeh_menu())
+            bot.send_message(uid, "📿 اختر ذكر:", reply_markup=tasbeeh_menu())
         elif data == "menu_fixed":
-            bot.edit_message_text("🌿 اختر نوع الأذكار:", c.message.chat.id, c.message.message_id, reply_markup=fixed_menu())
+            bot.send_message(uid, "🌿 اختر نوع الأذكار:", reply_markup=fixed_menu())
         elif data == "back_main":
-            bot.edit_message_text("📿 القائمة الرئيسية", c.message.chat.id, c.message.message_id, reply_markup=main_menu())
+            bot.send_message(uid, "📿 القائمة الرئيسية", reply_markup=main_menu())
         elif data == "menu_stats":
             kb = InlineKeyboardMarkup()
-            kb.add(InlineKeyboardButton("⬅️ رجوع", callback_data="back_main"))
-            bot.edit_message_text(format_stats(user), c.message.chat.id, c.message.message_id, reply_markup=kb)
-        elif data == "menu_global":
-            if uid == ADMIN_ID:
-                kb = InlineKeyboardMarkup()
-                kb.add(InlineKeyboardButton("⬅️ رجوع", callback_data="back_main"))
-                bot.edit_message_text(global_stats(), c.message.chat.id, c.message.message_id, reply_markup=kb)
+            kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
+            bot.send_message(uid, format_stats(user), reply_markup=kb)
+        elif data == "menu_global" and uid == ADMIN_ID:
+            kb = InlineKeyboardMarkup()
+            kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
+            bot.send_message(uid, global_stats(), reply_markup=kb)
 
         # -------- TASBEEH --------
         elif data.startswith("zikr|"):
             key = data.split("|")[1]
             z = AZKAR_TASBEEH[key]
             text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}"
-            bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=tasbeeh_counter_menu(key))
+            bot.send_message(uid, text, reply_markup=tasbeeh_counter_menu(key))
         elif data.startswith("add|"):
             key = data.split("|")[1]
             user["counts"][key] +=1
@@ -225,7 +224,7 @@ def callbacks(c):
             save_data(DATA)
             z = AZKAR_TASBEEH[key]
             text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}"
-            bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=tasbeeh_counter_menu(key))
+            bot.send_message(uid, text, reply_markup=tasbeeh_counter_menu(key))
         elif data.startswith("sub|"):
             key = data.split("|")[1]
             if user["counts"][key] >0:
@@ -234,7 +233,7 @@ def callbacks(c):
             save_data(DATA)
             z = AZKAR_TASBEEH[key]
             text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}"
-            bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=tasbeeh_counter_menu(key))
+            bot.send_message(uid, text, reply_markup=tasbeeh_counter_menu(key))
         elif data.startswith("reset|"):
             key = data.split("|")[1]
             user["total"]-=user["counts"][key]
@@ -242,7 +241,7 @@ def callbacks(c):
             save_data(DATA)
             z = AZKAR_TASBEEH[key]
             text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(0)}"
-            bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=tasbeeh_counter_menu(key))
+            bot.send_message(uid, text, reply_markup=tasbeeh_counter_menu(key))
 
         # -------- FIXED AZKAR --------
         elif data.startswith("fixed|"):
@@ -251,7 +250,7 @@ def callbacks(c):
             save_data(DATA)
             item = AZKAR_FIXED[key]["list"][0]
             text = f"{AZKAR_FIXED[key]['title']}\n\n{item['text']}\n\n🔢 {digital_counter(item['count'])}"
-            bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=fixed_counter_menu(key))
+            bot.send_message(uid, text, reply_markup=fixed_counter_menu(key))
         elif data.startswith("fixed_add|"):
             key = data.split("|")[1]
             if key not in user["fixed_progress"]:
@@ -264,7 +263,7 @@ def callbacks(c):
                 if prog["index"] >= len(AZKAR_FIXED[key]["list"]):
                     user["fixed_progress"].pop(key,None)
                     save_data(DATA)
-                    bot.edit_message_text("🌸 بارك الله لك وجعله في ميزان حسناتك", c.message.chat.id, c.message.message_id, reply_markup=main_menu())
+                    bot.send_message(uid, "🌸 بارك الله لك وجعله في ميزان حسناتك", reply_markup=main_menu())
                     bot.answer_callback_query(c.id)
                     return
                 next_item = AZKAR_FIXED[key]["list"][prog["index"]]
@@ -272,10 +271,9 @@ def callbacks(c):
             save_data(DATA)
             item = AZKAR_FIXED[key]["list"][prog["index"]]
             text = f"{AZKAR_FIXED[key]['title']}\n\n{item['text']}\n\n🔢 {digital_counter(prog['remaining'])}"
-            bot.edit_message_text(text, c.message.chat.id, c.message.message_id, reply_markup=fixed_counter_menu(key))
+            bot.send_message(uid, text, reply_markup=fixed_counter_menu(key))
 
         bot.answer_callback_query(c.id)
-
     except Exception as e:
         print("ERROR:", e)
         bot.answer_callback_query(c.id, "حدث خطأ ❌", show_alert=False)
