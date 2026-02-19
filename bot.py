@@ -3,6 +3,7 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import os, time, json
+from datetime import datetime
 
 # ===================== CONFIG =====================
 TOKEN = os.getenv("BOT_TOKEN")
@@ -11,12 +12,11 @@ if not TOKEN:
 
 bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 DATA_FILE = "data.json"
-ADMIN_ID = 123456789  # ضع هنا رقمك من @userinfobot
+ADMIN_ID = 123456789
 
 # ===================== DATA =====================
 DEFAULT_DATA = {"users": {}}
 
-# --------- أذكار تصاعدية (تسبيح) ---------
 AZKAR_TASBEEH = {
     "tasbeeh": {"name": "سبحان الله", "emoji": "🟢"},
     "tahmeed": {"name": "الحمد لله", "emoji": "🔵"},
@@ -25,49 +25,11 @@ AZKAR_TASBEEH = {
     "istighfar": {"name": "أستغفر الله", "emoji": "🟡"},
     "salat": {"name": "اللهم صلِّ على محمد ﷺ", "emoji": "🤍"},
     "hawqala": {"name": "لا حول ولا قوة إلا بالله", "emoji": "🟤"},
-    "hirz": {"name": "بسم الله الذي لا يضر مع اسمه شيء في الأرض ولا في السماء وهو السميع العليم", "emoji": "🛡️"}
+    "hirz": {"name": "بسم الله الذي لا يضر مع اسمه شيء", "emoji": "🛡️"}
 }
 
-# --------- أذكار ثابتة (تنازلية تلقائية) ---------
 AZKAR_FIXED = {
-    "sabah": {
-        "title": "🌅 أذكار الصباح",
-        "list": [
-            {"text": "أصبحنا وأصبح الملك لله", "count": 1},
-            {"text": "اللهم بك أصبحنا وبك أمسينا", "count": 1},
-            {"text": "سبحان الله وبحمده", "count": 100},
-            {"text": "لا إله إلا الله وحده لا شريك له، له الملك وله الحمد وهو على كل شيء قدير", "count": 10}
-        ]
-    },
-    "masaa": {
-        "title": "🌙 أذكار المساء",
-        "list": [
-            {"text": "أمسينا وأمسى الملك لله", "count": 1},
-            {"text": "اللهم بك أمسينا وبك أصبحنا", "count": 1},
-            {"text": "سبحان الله وبحمده", "count": 100},
-            {"text": "أعوذ بكلمات الله التامات من شر ما خلق", "count": 3}
-        ]
-    },
-    "sleep": {
-        "title": "😴 أذكار النوم",
-        "list": [
-            {"text": "باسمك ربي وضعت جنبي", "count": 1},
-            {"text": "آية الكرسي", "count": 1},
-            {"text": "سبحان الله", "count": 33},
-            {"text": "الحمد لله", "count": 33},
-            {"text": "الله أكبر", "count": 34}
-        ]
-    },
-    "after_salat": {
-        "title": "🕌 أذكار بعد الصلاة",
-        "list": [
-            {"text": "أستغفر الله", "count": 3},
-            {"text": "اللهم أنت السلام ومنك السلام", "count": 1},
-            {"text": "سبحان الله", "count": 33},
-            {"text": "الحمد لله", "count": 33},
-            {"text": "الله أكبر", "count": 34}
-        ]
-    }
+    "sabah": {"title": "🌅 أذكار الصباح", "list": [{"text": "أصبحنا وأصبح الملك لله", "count": 1}]}
 }
 
 # ===================== STORAGE =====================
@@ -88,43 +50,67 @@ DATA = load_data()
 
 def get_user(uid):
     uid = str(uid)
+    today = datetime.utcnow().date().isoformat()
+
     if uid not in DATA["users"]:
         DATA["users"][uid] = {
             "counts": {k: 0 for k in AZKAR_TASBEEH.keys()},
             "total": 0,
-            "fixed_progress": {}
+            "fixed_progress": {},
+            "daily_count": 0,
+            "daily_goal": 100,
+            "last_day": today,
+            "achievements": []
         }
-        save_data(DATA)
-    return DATA["users"][uid]
+
+    user = DATA["users"][uid]
+
+    if user.get("last_day") != today:
+        user["daily_count"] = 0
+        user["last_day"] = today
+
+    save_data(DATA)
+    return user
 
 # ===================== DIGITAL COUNTER =====================
 def digital_counter(num):
     digits = {"0":"𝟬","1":"𝟭","2":"𝟮","3":"𝟯","4":"𝟰","5":"𝟱","6":"𝟲","7":"𝟳","8":"𝟴","9":"𝟵"}
     return "".join(digits[d] for d in str(max(0,num)))
 
+# ===================== ACHIEVEMENTS =====================
+ACHIEVEMENTS = [
+    (1, "🎉 أول تسبيحة"),
+    (100, "💯 100 تسبيحة"),
+    (1000, "🔥 1000 تسبيحة"),
+    (10000, "🚀 10,000 تسبيحة")
+]
+
+def check_achievements(uid, user):
+    new_achievements = []
+    for value, title in ACHIEVEMENTS:
+        if user["total"] >= value and title not in user["achievements"]:
+            user["achievements"].append(title)
+            new_achievements.append(title)
+
+    if new_achievements:
+        save_data(DATA)
+        bot.send_message(uid, "🏆 <b>إنجاز جديد!</b>\n\n" + "\n".join(new_achievements))
+
 # ===================== UI =====================
 def main_menu():
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
         InlineKeyboardButton("📿 تسبيح", callback_data="menu_tasbeeh"),
-        InlineKeyboardButton("🌿 أذكار ثابتة", callback_data="menu_fixed"),
+        InlineKeyboardButton("🎯 الهدف اليومي", callback_data="menu_daily"),
+        InlineKeyboardButton("🏆 إنجازاتي", callback_data="menu_achievements"),
         InlineKeyboardButton("📊 إحصائياتي", callback_data="menu_stats")
     )
-    if ADMIN_ID:
-        kb.add(InlineKeyboardButton("📊 الإحصائيات العامة", callback_data="menu_global"))
     return kb
 
 def tasbeeh_menu():
     kb = InlineKeyboardMarkup(row_width=2)
     for k,v in AZKAR_TASBEEH.items():
         kb.add(InlineKeyboardButton(f"{v['emoji']} {v['name']}", callback_data=f"zikr|{k}"))
-    kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
-    return kb
-
-def fixed_menu():
-    kb = InlineKeyboardMarkup(row_width=1)
-    for k,v in AZKAR_FIXED.items():
-        kb.add(InlineKeyboardButton(v["title"], callback_data=f"fixed|{k}"))
     kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
     return kb
 
@@ -138,49 +124,20 @@ def tasbeeh_counter_menu(key):
     kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
     return kb
 
-def fixed_counter_menu(key):
-    kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("✔️ تم", callback_data=f"fixed_add|{key}"))
-    kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
-    return kb
-
 # ===================== HELPERS =====================
 def format_stats(user):
-    lines = ["<b>📊 إحصائياتك:</b>\n"]
-    for k,v in AZKAR_TASBEEH.items():
-        lines.append(f"{v['emoji']} {v['name']} : <b>{user['counts'][k]:,}</b>")
-    lines.append(f"\n✨ المجموع الكلي: <b>{user['total']:,}</b>")
-    return "\n".join(lines)
+    return f"""
+<b>📊 إحصائياتك</b>
 
-def global_stats():
-    total_users = len(DATA["users"])
-    total_all = sum(user.get("total",0) for user in DATA["users"].values())
-    global_counts = {k: sum(u.get("counts",{}).get(k,0) for u in DATA["users"].values()) for k in AZKAR_TASBEEH.keys()}
-    if global_counts:
-        most_used = max(global_counts, key=global_counts.get)
-        most_used_name = AZKAR_TASBEEH[most_used]["name"]
-        most_used_count = global_counts[most_used]
-    else:
-        most_used_name = "لا يوجد"
-        most_used_count = 0
-    text = f"""
-📊 <b>الإحصائيات العامة للبوت</b>
-
-👥 عدد المستخدمين: <b>{total_users}</b>
-
-📿 إجمالي التسبيحات: <b>{total_all:,}</b>
-
-🔥 أكثر ذكر استخداماً:
-<b>{most_used_name}</b>
-({most_used_count:,} مرة)
+✨ المجموع الكلي: <b>{user['total']:,}</b>
+🎯 اليوم: <b>{user['daily_count']:,}</b> / {user['daily_goal']}
 """
-    return text
 
 # ===================== HANDLERS =====================
 @bot.message_handler(commands=["start"])
 def start(m):
     get_user(m.from_user.id)
-    bot.send_message(m.chat.id,"📿 مرحباً بك في بوت الأذكار",reply_markup=main_menu())
+    bot.send_message(m.chat.id,"📿 مرحباً بك",reply_markup=main_menu())
 
 @bot.callback_query_handler(func=lambda c: True)
 def callbacks(c):
@@ -189,7 +146,23 @@ def callbacks(c):
         user = get_user(uid)
         data = c.data
 
-        if data.startswith("zikr|"):
+        if data == "menu_tasbeeh":
+            bot.send_message(uid, "📿 اختر ذكر:", reply_markup=tasbeeh_menu())
+
+        elif data == "menu_stats":
+            bot.send_message(uid, format_stats(user), reply_markup=main_menu())
+
+        elif data == "menu_daily":
+            bot.send_message(uid,
+                f"🎯 هدفك اليومي الحالي: <b>{user['daily_goal']}</b>\n"
+                f"📿 أنجزت اليوم: <b>{user['daily_count']}</b>")
+
+        elif data == "menu_achievements":
+            text = "<b>🏆 إنجازاتك:</b>\n\n"
+            text += "\n".join(user["achievements"]) if user["achievements"] else "لا يوجد بعد"
+            bot.send_message(uid, text)
+
+        elif data.startswith("zikr|"):
             key = data.split("|")[1]
             z = AZKAR_TASBEEH[key]
             text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}"
@@ -197,28 +170,36 @@ def callbacks(c):
 
         elif data.startswith("add|"):
             key = data.split("|")[1]
-            user["counts"][key] +=1
-            user["total"] +=1
+            user["counts"][key] += 1
+            user["total"] += 1
+            user["daily_count"] += 1
             save_data(DATA)
+
+            check_achievements(uid, user)
+
             z = AZKAR_TASBEEH[key]
             text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}"
             bot.edit_message_text(text, uid, c.message.message_id, reply_markup=tasbeeh_counter_menu(key))
 
         elif data.startswith("sub|"):
             key = data.split("|")[1]
-            if user["counts"][key] >0:
-                user["counts"][key]-=1
-                user["total"]-=1
+            if user["counts"][key] > 0:
+                user["counts"][key] -= 1
+                user["total"] -= 1
+                user["daily_count"] -= 1
             save_data(DATA)
+
             z = AZKAR_TASBEEH[key]
             text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}"
             bot.edit_message_text(text, uid, c.message.message_id, reply_markup=tasbeeh_counter_menu(key))
 
         elif data.startswith("reset|"):
             key = data.split("|")[1]
-            user["total"]-=user["counts"][key]
-            user["counts"][key]=0
+            user["total"] -= user["counts"][key]
+            user["daily_count"] -= user["counts"][key]
+            user["counts"][key] = 0
             save_data(DATA)
+
             z = AZKAR_TASBEEH[key]
             text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(0)}"
             bot.edit_message_text(text, uid, c.message.message_id, reply_markup=tasbeeh_counter_menu(key))
