@@ -224,37 +224,6 @@ def format_stats(user):
         lines.append(f"{v['emoji']} {v['name']} : <b>{user['counts'][k]:,}</b>")
     lines.append(f"\n✨ المجموع الكلي: <b>{user['total']:,}</b>")
     return "\n".join(lines)
-    def global_stats():
-    total_users = len(DATA["users"])
-
-    total_all = 0
-    global_counts = {k: 0 for k in AZKAR_TASBEEH.keys()}
-
-    for user in DATA["users"].values():
-        total_all += user.get("total", 0)
-        for zikr_key in AZKAR_TASBEEH.keys():
-            global_counts[zikr_key] += user.get("counts", {}).get(zikr_key, 0)
-
-    if global_counts:
-        most_used = max(global_counts, key=global_counts.get)
-        most_used_name = AZKAR_TASBEEH[most_used]["name"]
-        most_used_count = global_counts[most_used]
-    else:
-        most_used_name = "لا يوجد"
-        most_used_count = 0
-
-    text = f"""
-📊 <b>الإحصائيات العامة للبوت</b>
-
-👥 عدد المستخدمين: <b>{total_users}</b>
-
-📿 إجمالي التسبيحات: <b>{total_all:,}</b>
-
-🔥 أكثر ذكر استخداماً:
-<b>{most_used_name}</b>
-({most_used_count:,} مرة)
-"""
-    return text
 
 # ===================== HANDLERS =====================
 @bot.message_handler(commands=["start"])
