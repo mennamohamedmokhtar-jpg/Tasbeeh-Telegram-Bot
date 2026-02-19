@@ -224,6 +224,7 @@ def format_stats(user):
         lines.append(f"{v['emoji']} {v['name']} : <b>{user['counts'][k]:,}</b>")
     lines.append(f"\n✨ المجموع الكلي: <b>{user['total']:,}</b>")
     return "\n".join(lines)
+    
 
 # ===================== HANDLERS =====================
 @bot.message_handler(commands=["start"])
@@ -237,11 +238,6 @@ def callbacks(c):
         uid = c.from_user.id
         user = get_user(uid)
         data = c.data
-        @bot.message_handler(commands=["admin"])
-def admin_panel(m):
-    if m.from_user.id != ADMIN_ID:
-        return  # مش مسموح لأي حد غير الأدمين
-    bot.send_message(m.chat.id, global_stats())
 
         # -------- MAIN MENUS --------
         if data == "menu_tasbeeh":
