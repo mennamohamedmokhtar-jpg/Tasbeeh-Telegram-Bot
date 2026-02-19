@@ -24,7 +24,7 @@ AZKAR_TASBEEH = {
 }
 
 # --------- أذكار ثابتة (تنازلية تلقائية) ---------
-AZKAR_FIXED = {
+AZKAR_FIXED = 
     "sabah": {
         "title": "🌅 أذكار الصباح",
         "list": [
@@ -306,4 +306,5 @@ def callbacks(c):
 
 print("📿 Zikr Bot running...")
 bot.infinity_polling(skip_pending=True)
+
 
