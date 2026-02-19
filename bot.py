@@ -12,7 +12,7 @@ if not TOKEN:
 
 bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 DATA_FILE = "data.json"
-ADMIN_ID = 5123695463
+ADMIN_ID = 123456789
 
 # ===================== DATA =====================
 DEFAULT_DATA = {"users": {}}
@@ -21,15 +21,6 @@ AZKAR_TASBEEH = {
     "tasbeeh": {"name": "سبحان الله", "emoji": "🟢"},
     "tahmeed": {"name": "الحمد لله", "emoji": "🔵"},
     "takbeer": {"name": "الله أكبر", "emoji": "🟣"},
-    "tahleel": {"name": "لا إله إلا الله", "emoji": "🟠"},
-    "istighfar": {"name": "أستغفر الله", "emoji": "🟡"},
-    "salat": {"name": "اللهم صلِّ على محمد ﷺ", "emoji": "🤍"},
-    "hawqala": {"name": "لا حول ولا قوة إلا بالله", "emoji": "🟤"},
-    "hirz": {"name": "بسم الله الذي لا يضر مع اسمه شيء", "emoji": "🛡️"}
-}
-
-AZKAR_FIXED = {
-    "sabah": {"title": "🌅 أذكار الصباح", "list": [{"text": "أصبحنا وأصبح الملك لله", "count": 1}]}
 }
 
 # ===================== STORAGE =====================
@@ -56,9 +47,14 @@ def get_user(uid):
         DATA["users"][uid] = {
             "counts": {k: 0 for k in AZKAR_TASBEEH.keys()},
             "total": 0,
-            "fixed_progress": {},
             "daily_count": 0,
-            "daily_goal": 100,
+            "weekly_count": 0,
+            "monthly_count": 0,
+            "goals": {
+                "daily": 100,
+                "weekly": 500,
+                "monthly": 2000
+            },
             "last_day": today,
             "achievements": []
         }
@@ -77,33 +73,23 @@ def digital_counter(num):
     digits = {"0":"𝟬","1":"𝟭","2":"𝟮","3":"𝟯","4":"𝟰","5":"𝟱","6":"𝟲","7":"𝟳","8":"𝟴","9":"𝟵"}
     return "".join(digits[d] for d in str(max(0,num)))
 
-# ===================== ACHIEVEMENTS =====================
-ACHIEVEMENTS = [
-    (1, "🎉 أول تسبيحة"),
-    (100, "💯 100 تسبيحة"),
-    (1000, "🔥 1000 تسبيحة"),
-    (10000, "🚀 10,000 تسبيحة")
-]
-
-def check_achievements(uid, user):
-    new_achievements = []
-    for value, title in ACHIEVEMENTS:
-        if user["total"] >= value and title not in user["achievements"]:
-            user["achievements"].append(title)
-            new_achievements.append(title)
-
-    if new_achievements:
-        save_data(DATA)
-        bot.send_message(uid, "🏆 <b>إنجاز جديد!</b>\n\n" + "\n".join(new_achievements))
-
 # ===================== UI =====================
 def main_menu():
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
         InlineKeyboardButton("📿 تسبيح", callback_data="menu_tasbeeh"),
-        InlineKeyboardButton("🎯 الهدف اليومي", callback_data="menu_daily"),
-        InlineKeyboardButton("🏆 إنجازاتي", callback_data="menu_achievements"),
+        InlineKeyboardButton("🎯 أهدافي", callback_data="menu_goals"),
         InlineKeyboardButton("📊 إحصائياتي", callback_data="menu_stats")
+    )
+    return kb
+
+def goals_menu():
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton("🎯 هدف يومي", callback_data="set_goal|daily"),
+        InlineKeyboardButton("📅 هدف أسبوعي", callback_data="set_goal|weekly"),
+        InlineKeyboardButton("🗓 هدف شهري", callback_data="set_goal|monthly"),
+        InlineKeyboardButton("⬅️ رجوع", callback_data="back_main")
     )
     return kb
 
@@ -130,8 +116,25 @@ def format_stats(user):
 <b>📊 إحصائياتك</b>
 
 ✨ المجموع الكلي: <b>{user['total']:,}</b>
-🎯 اليوم: <b>{user['daily_count']:,}</b> / {user['daily_goal']}
+
+🎯 اليومي: <b>{user['daily_count']}</b> / {user['goals']['daily']}
+📅 الأسبوعي: <b>{user['weekly_count']}</b> / {user['goals']['weekly']}
+🗓 الشهري: <b>{user['monthly_count']}</b> / {user['goals']['monthly']}
 """
+
+# ===================== GOAL INPUT =====================
+def ask_goal_value(message, goal_type):
+    try:
+        value = int(message.text)
+        uid = message.from_user.id
+        user = get_user(uid)
+
+        user["goals"][goal_type] = value
+        save_data(DATA)
+
+        bot.send_message(uid, f"✅ تم تحديد الهدف {goal_type} = <b>{value}</b>", reply_markup=main_menu())
+    except:
+        bot.send_message(message.chat.id, "❌ اكتب رقم صحيح")
 
 # ===================== HANDLERS =====================
 @bot.message_handler(commands=["start"])
@@ -149,18 +152,16 @@ def callbacks(c):
         if data == "menu_tasbeeh":
             bot.send_message(uid, "📿 اختر ذكر:", reply_markup=tasbeeh_menu())
 
+        elif data == "menu_goals":
+            bot.send_message(uid, "🎯 اختر نوع الهدف:", reply_markup=goals_menu())
+
+        elif data.startswith("set_goal|"):
+            goal_type = data.split("|")[1]
+            msg = bot.send_message(uid, f"✍️ اكتب رقم الهدف {goal_type}:")
+            bot.register_next_step_handler(msg, ask_goal_value, goal_type)
+
         elif data == "menu_stats":
             bot.send_message(uid, format_stats(user), reply_markup=main_menu())
-
-        elif data == "menu_daily":
-            bot.send_message(uid,
-                f"🎯 هدفك اليومي الحالي: <b>{user['daily_goal']}</b>\n"
-                f"📿 أنجزت اليوم: <b>{user['daily_count']}</b>")
-
-        elif data == "menu_achievements":
-            text = "<b>🏆 إنجازاتك:</b>\n\n"
-            text += "\n".join(user["achievements"]) if user["achievements"] else "لا يوجد بعد"
-            bot.send_message(uid, text)
 
         elif data.startswith("zikr|"):
             key = data.split("|")[1]
@@ -173,9 +174,9 @@ def callbacks(c):
             user["counts"][key] += 1
             user["total"] += 1
             user["daily_count"] += 1
+            user["weekly_count"] += 1
+            user["monthly_count"] += 1
             save_data(DATA)
-
-            check_achievements(uid, user)
 
             z = AZKAR_TASBEEH[key]
             text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}"
@@ -187,22 +188,16 @@ def callbacks(c):
                 user["counts"][key] -= 1
                 user["total"] -= 1
                 user["daily_count"] -= 1
+                user["weekly_count"] -= 1
+                user["monthly_count"] -= 1
             save_data(DATA)
 
             z = AZKAR_TASBEEH[key]
             text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}"
             bot.edit_message_text(text, uid, c.message.message_id, reply_markup=tasbeeh_counter_menu(key))
 
-        elif data.startswith("reset|"):
-            key = data.split("|")[1]
-            user["total"] -= user["counts"][key]
-            user["daily_count"] -= user["counts"][key]
-            user["counts"][key] = 0
-            save_data(DATA)
-
-            z = AZKAR_TASBEEH[key]
-            text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(0)}"
-            bot.edit_message_text(text, uid, c.message.message_id, reply_markup=tasbeeh_counter_menu(key))
+        elif data == "back_main":
+            bot.send_message(uid, "📿 القائمة الرئيسية", reply_markup=main_menu())
 
         bot.answer_callback_query(c.id)
 
