@@ -92,7 +92,10 @@ def get_user(uid):
         DATA["users"][uid] = {
             "counts": {k: 0 for k in AZKAR_TASBEEH.keys()},
             "total": 0,
-            "fixed_progress": {}
+            "fixed_progress": {},
+            "daily_goal": 0,
+            "today_count": 0,
+            "last_day": ""
         }
         save_data(DATA)
     return DATA["users"][uid]
@@ -102,13 +105,41 @@ def digital_counter(num):
     digits = {"0":"𝟬","1":"𝟭","2":"𝟮","3":"𝟯","4":"𝟰","5":"𝟱","6":"𝟲","7":"𝟳","8":"𝟴","9":"𝟵"}
     return "".join(digits[d] for d in str(max(0,num)))
 
+# ===================== NEW FEATURES =====================
+def check_new_day(user):
+    today = time.strftime("%Y-%m-%d")
+    if user["last_day"] != today:
+        user["last_day"] = today
+        user["today_count"] = 0
+
+def progress_bar(current, goal):
+    if goal == 0:
+        return ""
+    percent = int((current / goal) * 100)
+    filled = int(percent / 10)
+    bar = "█" * filled + "░" * (10 - filled)
+    return f"\n🎯 {current}/{goal}\n{bar} {percent}%"
+
+def get_level(total):
+    if total < 100:
+        return "🌱 مبتدئ"
+    elif total < 1000:
+        return "💪 مجتهد"
+    elif total < 10000:
+        return "🌟 ذاكر"
+    elif total < 100000:
+        return "🔥 ثابت"
+    else:
+        return "👑 سابق بالخيرات"
+
 # ===================== UI =====================
 def main_menu():
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
         InlineKeyboardButton("📿 تسبيح", callback_data="menu_tasbeeh"),
         InlineKeyboardButton("🌿 أذكار ثابتة", callback_data="menu_fixed"),
-        InlineKeyboardButton("📊 إحصائياتي", callback_data="menu_stats")
+        InlineKeyboardButton("📊 إحصائياتي", callback_data="menu_stats"),
+        InlineKeyboardButton("🎯 تحديد هدف يومي", callback_data="set_goal")
     )
     if ADMIN_ID:
         kb.add(InlineKeyboardButton("📊 الإحصائيات العامة", callback_data="menu_global"))
@@ -118,13 +149,6 @@ def tasbeeh_menu():
     kb = InlineKeyboardMarkup(row_width=2)
     for k,v in AZKAR_TASBEEH.items():
         kb.add(InlineKeyboardButton(f"{v['emoji']} {v['name']}", callback_data=f"zikr|{k}"))
-    kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
-    return kb
-
-def fixed_menu():
-    kb = InlineKeyboardMarkup(row_width=1)
-    for k,v in AZKAR_FIXED.items():
-        kb.add(InlineKeyboardButton(v["title"], callback_data=f"fixed|{k}"))
     kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
     return kb
 
@@ -138,55 +162,21 @@ def tasbeeh_counter_menu(key):
     kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
     return kb
 
-def fixed_counter_menu(key):
-    kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("✔️ تم", callback_data=f"fixed_add|{key}"))
-    kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
-    return kb
-
 # ===================== HELPERS =====================
 def format_stats(user):
     lines = ["<b>📊 إحصائياتك:</b>\n"]
     for k,v in AZKAR_TASBEEH.items():
         lines.append(f"{v['emoji']} {v['name']} : <b>{user['counts'][k]:,}</b>")
+    level = get_level(user["total"])
+    lines.append(f"\n🏆 مستواك: <b>{level}</b>")
     lines.append(f"\n✨ المجموع الكلي: <b>{user['total']:,}</b>")
     return "\n".join(lines)
-
-def global_stats():
-    total_users = len(DATA["users"])
-    total_all = sum(user.get("total",0) for user in DATA["users"].values())
-    global_counts = {k: sum(u.get("counts",{}).get(k,0) for u in DATA["users"].values()) for k in AZKAR_TASBEEH.keys()}
-    if global_counts:
-        most_used = max(global_counts, key=global_counts.get)
-        most_used_name = AZKAR_TASBEEH[most_used]["name"]
-        most_used_count = global_counts[most_used]
-    else:
-        most_used_name = "لا يوجد"
-        most_used_count = 0
-    text = f"""
-📊 <b>الإحصائيات العامة للبوت</b>
-
-👥 عدد المستخدمين: <b>{total_users}</b>
-
-📿 إجمالي التسبيحات: <b>{total_all:,}</b>
-
-🔥 أكثر ذكر استخداماً:
-<b>{most_used_name}</b>
-({most_used_count:,} مرة)
-"""
-    return text
 
 # ===================== HANDLERS =====================
 @bot.message_handler(commands=["start"])
 def start(m):
     get_user(m.from_user.id)
     bot.send_message(m.chat.id,"📿 مرحباً بك في بوت الأذكار",reply_markup=main_menu())
-
-@bot.message_handler(commands=["admin"])
-def admin_panel(m):
-    if m.from_user.id != ADMIN_ID:
-        return
-    bot.send_message(m.chat.id, global_stats())
 
 @bot.callback_query_handler(func=lambda c: True)
 def callbacks(c):
@@ -197,38 +187,47 @@ def callbacks(c):
 
         if data == "menu_tasbeeh":
             bot.send_message(uid, "📿 اختر ذكر:", reply_markup=tasbeeh_menu())
+
+        elif data == "set_goal":
+            msg = bot.send_message(uid, "اكتب الهدف اليومي بالأرقام:")
+            bot.register_next_step_handler(msg, set_goal_handler)
+
         elif data.startswith("zikr|"):
             key = data.split("|")[1]
+            check_new_day(user)
             z = AZKAR_TASBEEH[key]
-            text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}"
-            msg = bot.send_message(uid, text, reply_markup=tasbeeh_counter_menu(key))
-        elif data.startswith("add|") or data.startswith("sub|") or data.startswith("reset|"):
-            action, key = data.split("|")
-            if action == "add":
-                user["counts"][key] +=1
-                user["total"] +=1
-            elif action == "sub":
-                if user["counts"][key] >0:
-                    user["counts"][key]-=1
-                    user["total"]-=1
-            elif action == "reset":
-                user["total"]-=user["counts"][key]
-                user["counts"][key]=0
+            progress = progress_bar(user["today_count"], user["daily_goal"])
+            text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}{progress}"
+            bot.send_message(uid, text, reply_markup=tasbeeh_counter_menu(key))
 
+        elif data.startswith("add|"):
+            key = data.split("|")[1]
+            check_new_day(user)
+            user["counts"][key] +=1
+            user["total"] +=1
+            user["today_count"] +=1
             save_data(DATA)
+            if user["daily_goal"] > 0 and user["today_count"] == user["daily_goal"]:
+                bot.send_message(uid, "🎉 ما شاء الله! وصلت لهدفك اليومي!")
             z = AZKAR_TASBEEH[key]
-            text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}"
-            bot.edit_message_text(
-                text,
-                chat_id=uid,
-                message_id=c.message.message_id,
-                reply_markup=tasbeeh_counter_menu(key)
-            )
+            progress = progress_bar(user["today_count"], user["daily_goal"])
+            text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}{progress}"
+            bot.edit_message_text(text, chat_id=uid, message_id=c.message.message_id, reply_markup=tasbeeh_counter_menu(key))
 
         bot.answer_callback_query(c.id)
     except Exception as e:
         print("ERROR:", e)
         bot.answer_callback_query(c.id, "حدث خطأ ❌", show_alert=False)
+
+def set_goal_handler(m):
+    user = get_user(m.from_user.id)
+    try:
+        goal = int(m.text)
+        user["daily_goal"] = max(0, goal)
+        save_data(DATA)
+        bot.send_message(m.chat.id, "✅ تم تحديد الهدف بنجاح", reply_markup=main_menu())
+    except:
+        bot.send_message(m.chat.id, "❌ اكتب رقم صحيح")
 
 # ===================== RUN =====================
 print("📿 Zikr Bot running...")
