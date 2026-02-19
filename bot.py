@@ -11,12 +11,11 @@ if not TOKEN:
 
 bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 DATA_FILE = "data.json"
-ADMIN_ID = 5123695463  # ضع هنا رقمك من @userinfobot
+ADMIN_ID = 5123695463
 
 # ===================== DATA =====================
 DEFAULT_DATA = {"users": {}}
 
-# --------- أذكار تصاعدية (تسبيح) ---------
 AZKAR_TASBEEH = {
     "tasbeeh": {"name": "سبحان الله", "emoji": "🟢"},
     "tahmeed": {"name": "الحمد لله", "emoji": "🔵"},
@@ -28,46 +27,29 @@ AZKAR_TASBEEH = {
     "hirz": {"name": "بسم الله الذي لا يضر مع اسمه شيء في الأرض ولا في السماء وهو السميع العليم", "emoji": "🛡️"}
 }
 
-# --------- أذكار ثابتة (تنازلية تلقائية) ---------
 AZKAR_FIXED = {
-    "sabah": {
-        "title": "🌅 أذكار الصباح",
-        "list": [
-            {"text": "أصبحنا وأصبح الملك لله", "count": 1},
-            {"text": "اللهم بك أصبحنا وبك أمسينا", "count": 1},
-            {"text": "سبحان الله وبحمده", "count": 100},
-            {"text": "لا إله إلا الله وحده لا شريك له، له الملك وله الحمد وهو على كل شيء قدير", "count": 10}
-        ]
-    },
-    "masaa": {
-        "title": "🌙 أذكار المساء",
-        "list": [
-            {"text": "أمسينا وأمسى الملك لله", "count": 1},
-            {"text": "اللهم بك أمسينا وبك أصبحنا", "count": 1},
-            {"text": "سبحان الله وبحمده", "count": 100},
-            {"text": "أعوذ بكلمات الله التامات من شر ما خلق", "count": 3}
-        ]
-    },
-    "sleep": {
-        "title": "😴 أذكار النوم",
-        "list": [
-            {"text": "باسمك ربي وضعت جنبي", "count": 1},
-            {"text": "آية الكرسي", "count": 1},
-            {"text": "سبحان الله", "count": 33},
-            {"text": "الحمد لله", "count": 33},
-            {"text": "الله أكبر", "count": 34}
-        ]
-    },
-    "after_salat": {
-        "title": "🕌 أذكار بعد الصلاة",
-        "list": [
-            {"text": "أستغفر الله", "count": 3},
-            {"text": "اللهم أنت السلام ومنك السلام", "count": 1},
-            {"text": "سبحان الله", "count": 33},
-            {"text": "الحمد لله", "count": 33},
-            {"text": "الله أكبر", "count": 34}
-        ]
-    }
+    "sabah": {"title":"🌅 أذكار الصباح","list":[
+        {"text":"أصبحنا وأصبح الملك لله","count":1},
+        {"text":"اللهم بك أصبحنا وبك أمسينا","count":1},
+        {"text":"سبحان الله وبحمده","count":100},
+        {"text":"لا إله إلا الله وحده لا شريك له، له الملك وله الحمد وهو على كل شيء قدير","count":10}]},
+    "masaa": {"title":"🌙 أذكار المساء","list":[
+        {"text":"أمسينا وأمسى الملك لله","count":1},
+        {"text":"اللهم بك أمسينا وبك أصبحنا","count":1},
+        {"text":"سبحان الله وبحمده","count":100},
+        {"text":"أعوذ بكلمات الله التامات من شر ما خلق","count":3}]},
+    "sleep": {"title":"😴 أذكار النوم","list":[
+        {"text":"باسمك ربي وضعت جنبي","count":1},
+        {"text":"آية الكرسي","count":1},
+        {"text":"سبحان الله","count":33},
+        {"text":"الحمد لله","count":33},
+        {"text":"الله أكبر","count":34}]},
+    "after_salat": {"title":"🕌 أذكار بعد الصلاة","list":[
+        {"text":"أستغفر الله","count":3},
+        {"text":"اللهم أنت السلام ومنك السلام","count":1},
+        {"text":"سبحان الله","count":33},
+        {"text":"الحمد لله","count":33},
+        {"text":"الله أكبر","count":34}]}
 }
 
 # ===================== STORAGE =====================
@@ -163,18 +145,7 @@ def global_stats():
     else:
         most_used_name = "لا يوجد"
         most_used_count = 0
-    text = f"""
-📊 <b>الإحصائيات العامة للبوت</b>
-
-👥 عدد المستخدمين: <b>{total_users}</b>
-
-📿 إجمالي التسبيحات: <b>{total_all:,}</b>
-
-🔥 أكثر ذكر استخداماً:
-<b>{most_used_name}</b>
-({most_used_count:,} مرة)
-"""
-    return text
+    return f"📊 <b>الإحصائيات العامة للبوت</b>\n\n👥 عدد المستخدمين: <b>{total_users}</b>\n📿 إجمالي التسبيحات: <b>{total_all:,}</b>\n🔥 أكثر ذكر استخداماً:\n<b>{most_used_name}</b>\n({most_used_count:,} مرة)"
 
 # ===================== HANDLERS =====================
 @bot.message_handler(commands=["start"])
@@ -194,29 +165,36 @@ def callbacks(c):
         uid = c.from_user.id
         user = get_user(uid)
         data = c.data
+        chat_id = c.message.chat.id
+        msg_id = c.message.message_id
 
         # -------- MAIN MENUS --------
         if data == "menu_tasbeeh":
-            bot.send_message(uid, "📿 اختر ذكر:", reply_markup=tasbeeh_menu())
+            bot.edit_message_text("📿 اختر ذكر:", chat_id, msg_id, reply_markup=tasbeeh_menu())
+
         elif data == "menu_fixed":
-            bot.send_message(uid, "🌿 اختر نوع الأذكار:", reply_markup=fixed_menu())
+            bot.edit_message_text("🌿 اختر نوع الأذكار:", chat_id, msg_id, reply_markup=fixed_menu())
+
         elif data == "back_main":
-            bot.send_message(uid, "📿 القائمة الرئيسية", reply_markup=main_menu())
+            bot.edit_message_text("📿 القائمة الرئيسية", chat_id, msg_id, reply_markup=main_menu())
+
         elif data == "menu_stats":
             kb = InlineKeyboardMarkup()
             kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
-            bot.send_message(uid, format_stats(user), reply_markup=kb)
+            bot.edit_message_text(format_stats(user), chat_id, msg_id, reply_markup=kb)
+
         elif data == "menu_global" and uid == ADMIN_ID:
             kb = InlineKeyboardMarkup()
             kb.add(InlineKeyboardButton("⬅️ القائمة الرئيسية", callback_data="back_main"))
-            bot.send_message(uid, global_stats(), reply_markup=kb)
+            bot.edit_message_text(global_stats(), chat_id, msg_id, reply_markup=kb)
 
         # -------- TASBEEH --------
         elif data.startswith("zikr|"):
             key = data.split("|")[1]
             z = AZKAR_TASBEEH[key]
             text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}"
-            bot.send_message(uid, text, reply_markup=tasbeeh_counter_menu(key))
+            bot.edit_message_text(text, chat_id, msg_id, reply_markup=tasbeeh_counter_menu(key))
+
         elif data.startswith("add|"):
             key = data.split("|")[1]
             user["counts"][key] +=1
@@ -224,7 +202,8 @@ def callbacks(c):
             save_data(DATA)
             z = AZKAR_TASBEEH[key]
             text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}"
-            bot.send_message(uid, text, reply_markup=tasbeeh_counter_menu(key))
+            bot.edit_message_text(text, chat_id, msg_id, reply_markup=tasbeeh_counter_menu(key))
+
         elif data.startswith("sub|"):
             key = data.split("|")[1]
             if user["counts"][key] >0:
@@ -233,7 +212,8 @@ def callbacks(c):
             save_data(DATA)
             z = AZKAR_TASBEEH[key]
             text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(user['counts'][key])}"
-            bot.send_message(uid, text, reply_markup=tasbeeh_counter_menu(key))
+            bot.edit_message_text(text, chat_id, msg_id, reply_markup=tasbeeh_counter_menu(key))
+
         elif data.startswith("reset|"):
             key = data.split("|")[1]
             user["total"]-=user["counts"][key]
@@ -241,7 +221,7 @@ def callbacks(c):
             save_data(DATA)
             z = AZKAR_TASBEEH[key]
             text = f"{z['emoji']} <b>{z['name']}</b>\n\n🔢 {digital_counter(0)}"
-            bot.send_message(uid, text, reply_markup=tasbeeh_counter_menu(key))
+            bot.edit_message_text(text, chat_id, msg_id, reply_markup=tasbeeh_counter_menu(key))
 
         # -------- FIXED AZKAR --------
         elif data.startswith("fixed|"):
@@ -250,7 +230,8 @@ def callbacks(c):
             save_data(DATA)
             item = AZKAR_FIXED[key]["list"][0]
             text = f"{AZKAR_FIXED[key]['title']}\n\n{item['text']}\n\n🔢 {digital_counter(item['count'])}"
-            bot.send_message(uid, text, reply_markup=fixed_counter_menu(key))
+            bot.edit_message_text(text, chat_id, msg_id, reply_markup=fixed_counter_menu(key))
+
         elif data.startswith("fixed_add|"):
             key = data.split("|")[1]
             if key not in user["fixed_progress"]:
@@ -263,7 +244,7 @@ def callbacks(c):
                 if prog["index"] >= len(AZKAR_FIXED[key]["list"]):
                     user["fixed_progress"].pop(key,None)
                     save_data(DATA)
-                    bot.send_message(uid, "🌸 بارك الله لك وجعله في ميزان حسناتك", reply_markup=main_menu())
+                    bot.edit_message_text("🌸 بارك الله لك وجعله في ميزان حسناتك", chat_id, msg_id, reply_markup=main_menu())
                     bot.answer_callback_query(c.id)
                     return
                 next_item = AZKAR_FIXED[key]["list"][prog["index"]]
@@ -271,9 +252,10 @@ def callbacks(c):
             save_data(DATA)
             item = AZKAR_FIXED[key]["list"][prog["index"]]
             text = f"{AZKAR_FIXED[key]['title']}\n\n{item['text']}\n\n🔢 {digital_counter(prog['remaining'])}"
-            bot.send_message(uid, text, reply_markup=fixed_counter_menu(key))
+            bot.edit_message_text(text, chat_id, msg_id, reply_markup=fixed_counter_menu(key))
 
         bot.answer_callback_query(c.id)
+
     except Exception as e:
         print("ERROR:", e)
         bot.answer_callback_query(c.id, "حدث خطأ ❌", show_alert=False)
