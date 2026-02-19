@@ -224,6 +224,15 @@ def format_stats(user):
         lines.append(f"{v['emoji']} {v['name']} : <b>{user['counts'][k]:,}</b>")
     lines.append(f"\n✨ المجموع الكلي: <b>{user['total']:,}</b>")
     return "\n".join(lines)
+
+def global_stats():
+    total_users=len(DATA["users"])
+    total_all=sum(u.get("total",0) for u in DATA["users"].values())
+    global_counts={k:sum(u.get("counts",{}).get(k,0) for u in DATA["users"].values()) for k in AZKAR_TASBEEH.keys()}
+    most_used=max(global_counts,key=global_counts.get) if global_counts else None
+    most_used_name=AZKAR_TASBEEH[most_used]["name"] if most_used else "لا يوجد"
+    most_used_count=global_counts[most_used] if most_used else 0
+    return f"📊 <b>الإحصائيات العامة للبوت</b>\n\n👥 عدد المستخدمين: <b>{total_users}</b>\n📿 إجمالي التسبيحات: <b>{total_all:,}</b>\n🔥 أكثر ذكر استخداماً: <b>{most_used_name}</b> ({most_used_count:,} مرة)"
     
 
 # ===================== HANDLERS =====================
@@ -332,6 +341,7 @@ def callbacks(c):
 # ===================== RUN =====================
 print("📿 Zikr Bot running...")
 bot.infinity_polling(skip_pending=True)
+
 
 
 
